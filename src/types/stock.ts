@@ -18,8 +18,9 @@ export interface StockMonitor {
   name: string;
   targetPrice: number;
   condition: 'above' | 'below';
-  monitorType: 'price' | 'premium'; // 新增：监控类型
+  monitorType: 'price' | 'premium' | 'changePercent'; // 新增：监控类型
   premiumThreshold?: number; // 新增：溢价阈值（百分比）
+  changePercentThreshold?: number; // 新增：涨跌幅阈值（百分比）
   isActive: boolean;
   notificationSent: boolean;
   createdAt: Date;
@@ -43,6 +44,7 @@ export interface EditMonitorData {
   name: string;
   targetPrice: number;
   condition: 'above' | 'below';
-  monitorType: 'price' | 'premium';
+  monitorType: 'price' | 'premium' | 'changePercent';
   premiumThreshold?: number;
+  changePercentThreshold?: number;
 }

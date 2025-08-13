@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -10,7 +10,7 @@ import { fetchStockData } from '@/lib/stockApi';
 import { sendNotification } from '@/lib/notifications';
 import { StockMonitor, StockData } from '@/types/stock';
 import { toast } from 'sonner';
-import { Trash2, Bell, BellOff, Edit, TrendingUp, DollarSign, AlertCircle } from 'lucide-react';
+import { Trash2, BellOff, Edit, TrendingUp, DollarSign, AlertCircle } from 'lucide-react';
 
 interface MonitorListProps {
   refreshTrigger: number;
@@ -26,19 +26,69 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     loadMonitors();
   }, [refreshTrigger]);
 
-  useEffect(() => {
-    if (monitors.length > 0) {
-      const interval = setInterval(updateStockData, 10000); // 每10秒更新一次
-      return () => clearInterval(interval);
-    }
-  }, [monitors]);
-
   const loadMonitors = () => {
     const loadedMonitors = getStockMonitors();
     setMonitors(loadedMonitors);
   };
 
-  const updateStockData = async () => {
+  const checkAndSendNotification = useCallback((monitor: StockMonitor, stockData: StockData) => {
+    if (monitor.notificationSent) return;
+    
+    let shouldNotify = false;
+    
+    if (monitor.monitorType === 'price') {
+      // 价格监控
+      if (monitor.condition === 'above' && stockData.currentPrice >= monitor.targetPrice) {
+        shouldNotify = true;
+      } else if (monitor.condition === 'below' && stockData.currentPrice <= monitor.targetPrice) {
+        shouldNotify = true;
+      }
+    } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
+      // 溢价监控
+      const currentPremium = Math.abs(stockData.premium);
+      if (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) {
+        shouldNotify = true;
+      } else if (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold) {
+        shouldNotify = true;
+      }
+    } else if (monitor.monitorType === 'changePercent' && monitor.changePercentThreshold !== undefined) {
+      // 涨跌幅监控
+      if (monitor.condition === 'above' && stockData.changePercent >= monitor.changePercentThreshold) {
+        shouldNotify = true;
+      } else if (monitor.condition === 'below' && stockData.changePercent <= monitor.changePercentThreshold) {
+        shouldNotify = true;
+      }
+    }
+    
+    if (shouldNotify) {
+      let notificationTitle = '';
+      let notificationBody = '';
+      
+      if (monitor.monitorType === 'price') {
+        const conditionText = monitor.condition === 'above' ? '高于' : '低于';
+        notificationTitle = '股票价格提醒';
+        notificationBody = `${monitor.name}(${monitor.code}) 当前价格 ${stockData.currentPrice.toFixed(3)} 已${conditionText}目标价格 ${monitor.targetPrice.toFixed(3)}`;
+      } else if (monitor.monitorType === 'premium') {
+        const conditionText = monitor.condition === 'above' ? '高于' : '低于';
+        notificationTitle = '股票溢价提醒';
+        notificationBody = `${monitor.name}(${monitor.code}) 当前涨跌幅 ${stockData.changePercent.toFixed(2)}% 已${conditionText}阈值 ${monitor.premiumThreshold?.toFixed(3)}%`;
+      } else {
+        const conditionText = monitor.condition === 'above' ? '高于' : '低于';
+        notificationTitle = '股票涨跌幅提醒';
+        notificationBody = `${monitor.name}(${monitor.code}) 当前涨跌幅 ${stockData.changePercent.toFixed(2)}% 已${conditionText}阈值 ${monitor.changePercentThreshold?.toFixed(2)}%`;
+      }
+      
+      sendNotification(notificationTitle, notificationBody);
+      
+      // 标记通知已发送
+      updateStockMonitor(monitor.id, { notificationSent: true });
+      loadMonitors(); // 重新加载列表
+      
+      toast.success(`${monitor.name} 提醒已发送！`);
+    }
+  }, []);
+
+  const updateStockData = useCallback(async () => {
     setIsLoading(true);
     const newStockData: Record<string, StockData> = {};
     
@@ -58,53 +108,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     
     setStockData(newStockData);
     setIsLoading(false);
-  };
+  }, [monitors, checkAndSendNotification]);
 
-  const checkAndSendNotification = (monitor: StockMonitor, stockData: StockData) => {
-    if (monitor.notificationSent) return;
-    
-    let shouldNotify = false;
-    
-    if (monitor.monitorType === 'price') {
-      // 价格监控
-      if (monitor.condition === 'above' && stockData.currentPrice >= monitor.targetPrice) {
-        shouldNotify = true;
-      } else if (monitor.condition === 'below' && stockData.currentPrice <= monitor.targetPrice) {
-        shouldNotify = true;
-      }
-    } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
-      // 溢价监控
-      const currentPremium = Math.abs(stockData.changePercent);
-      if (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) {
-        shouldNotify = true;
-      } else if (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold) {
-        shouldNotify = true;
-      }
+  useEffect(() => {
+    if (monitors.length > 0) {
+      const interval = setInterval(updateStockData, 10000); // 每10秒更新一次
+      return () => clearInterval(interval);
     }
-    
-    if (shouldNotify) {
-      let notificationTitle = '';
-      let notificationBody = '';
-      
-      if (monitor.monitorType === 'price') {
-        const conditionText = monitor.condition === 'above' ? '高于' : '低于';
-        notificationTitle = '股票价格提醒';
-        notificationBody = `${monitor.name}(${monitor.code}) 当前价格 ${stockData.currentPrice} 已${conditionText}目标价格 ${monitor.targetPrice}`;
-      } else {
-        const conditionText = monitor.condition === 'above' ? '高于' : '低于';
-        notificationTitle = '股票溢价提醒';
-        notificationBody = `${monitor.name}(${monitor.code}) 当前涨跌幅 ${stockData.changePercent.toFixed(2)}% 已${conditionText}阈值 ${monitor.premiumThreshold}%`;
-      }
-      
-      sendNotification(notificationTitle, notificationBody);
-      
-      // 标记通知已发送
-      updateStockMonitor(monitor.id, { notificationSent: true });
-      loadMonitors(); // 重新加载列表
-      
-      toast.success(`${monitor.name} 提醒已发送！`);
-    }
-  };
+  }, [monitors, updateStockData]);
 
   const toggleMonitor = async (monitor: StockMonitor) => {
     const updated = updateStockMonitor(monitor.id, { 
@@ -175,6 +186,9 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
               const currentPremium = Math.abs(currentData.changePercent);
               isTriggered = (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) ||
                            (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold);
+            } else if (monitor.monitorType === 'changePercent' && monitor.changePercentThreshold !== undefined) {
+              isTriggered = (monitor.condition === 'above' && currentData.changePercent >= monitor.changePercentThreshold) ||
+                           (monitor.condition === 'below' && currentData.changePercent <= monitor.changePercentThreshold);
             }
           }
           
@@ -185,8 +199,10 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                   <div className="flex items-center gap-2">
                     {monitor.monitorType === 'price' ? (
                       <DollarSign className="h-5 w-5 text-blue-600" />
-                    ) : (
+                    ) : monitor.monitorType === 'premium' ? (
                       <TrendingUp className="h-5 w-5 text-orange-600" />
+                    ) : (
+                      <TrendingUp className="h-5 w-5 text-purple-600" />
                     )}
                     <div>
                       <CardTitle className="text-lg">{monitor.name}</CardTitle>
@@ -220,12 +236,15 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-muted-foreground">
-                      {monitor.monitorType === 'price' ? '目标价格' : '溢价阈值'}
+                      {monitor.monitorType === 'price' ? '目标价格' : 
+                       monitor.monitorType === 'premium' ? '溢价阈值' : '涨跌幅阈值'}
                     </p>
                     <p className="font-semibold">
                       {monitor.monitorType === 'price' 
-                        ? monitor.targetPrice 
-                        : `${monitor.premiumThreshold}%`
+                        ? monitor.targetPrice.toFixed(3)
+                        : monitor.monitorType === 'premium'
+                        ? `${monitor.premiumThreshold?.toFixed(3)}%`
+                        : `${monitor.changePercentThreshold?.toFixed(2)}%`
                       }
                     </p>
                   </div>
@@ -233,8 +252,10 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                     <p className="text-sm text-muted-foreground">监控条件</p>
                     <p className="font-semibold">
                       {monitor.condition === 'above' 
-                        ? (monitor.monitorType === 'price' ? '价格高于目标' : '溢价高于阈值')
-                        : (monitor.monitorType === 'price' ? '价格低于目标' : '溢价低于阈值')
+                        ? (monitor.monitorType === 'price' ? '价格高于目标' : 
+                           monitor.monitorType === 'premium' ? '溢价高于阈值' : '涨跌幅高于阈值')
+                        : (monitor.monitorType === 'price' ? '价格低于目标' : 
+                           monitor.monitorType === 'premium' ? '溢价低于阈值' : '涨跌幅低于阈值')
                       }
                     </p>
                   </div>
@@ -248,7 +269,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       <div>
                         <p className="text-sm text-muted-foreground">当前股价</p>
                         <p className={`font-semibold text-lg ${isTriggered ? 'text-green-600' : 'text-foreground'}`}>
-                          ¥{currentData.currentPrice.toFixed(2)}
+                          ¥{currentData.currentPrice.toFixed(3)}
                         </p>
                       </div>
                       <div>
@@ -259,17 +280,17 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">最高价</p>
-                        <p className="font-semibold">¥{currentData.high.toFixed(2)}</p>
+                        <p className="font-semibold">¥{currentData.high.toFixed(3)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">当前溢价</p>
-                        <p className="font-semibold">{currentData.premium}%</p>
+                        <p className="font-semibold">{currentData.premium.toFixed(3)}%</p>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">暂无实时数据，点击"手动更新"获取最新数据</span>
+                      <span className="text-sm">暂无实时数据，点击&ldquo;手动更新&rdquo;获取最新数据</span>
                     </div>
                   )}
                 </div>
@@ -281,7 +302,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       {monitor.isActive ? '监控中' : '已暂停'}
                     </Badge>
                     <Badge variant="outline" className="text-blue-600 border-blue-600">
-                      {monitor.monitorType === 'price' ? '价格监控' : '溢价监控'}
+                      {monitor.monitorType === 'price' ? '价格监控' : 
+                       monitor.monitorType === 'premium' ? '溢价监控' : '涨跌幅监控'}
                     </Badge>
                     {monitor.notificationSent && (
                       <Badge variant="outline" className="text-green-600 border-green-600">

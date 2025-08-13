@@ -3,14 +3,15 @@ import { StockMonitor } from '@/types/stock';
 const STORAGE_KEY = 'stock-monitors';
 
 // 数据迁移函数，为现有数据添加新字段
-function migrateMonitorData(monitor: any): StockMonitor {
+function migrateMonitorData(monitor: Record<string, unknown>): StockMonitor {
   return {
     ...monitor,
-    monitorType: monitor.monitorType || 'price',
-    premiumThreshold: monitor.premiumThreshold || undefined,
-    createdAt: new Date(monitor.createdAt),
-    updatedAt: new Date(monitor.updatedAt)
-  };
+    monitorType: (monitor.monitorType as 'price' | 'premium' | 'changePercent') || 'price',
+    premiumThreshold: monitor.premiumThreshold as number | undefined,
+    changePercentThreshold: monitor.changePercentThreshold as number | undefined,
+    createdAt: new Date(monitor.createdAt as string),
+    updatedAt: new Date(monitor.updatedAt as string)
+  } as StockMonitor;
 }
 
 export function getStockMonitors(): StockMonitor[] {
