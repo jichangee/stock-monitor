@@ -16,24 +16,25 @@ import { StockMonitor } from '@/types/stock';
 import { Search, Loader2 } from 'lucide-react';
 
 const addMonitorSchema = z.object({
-  code: z.string().min(1, '请输入股票代码'),
-  name: z.string().min(1, '请输入股票名称'),
-  targetPrice: z.number().positive('目标价格必须大于0'),
+  code: z.string().min(1, '请输入股票代码').trim(),
+  name: z.string().min(1, '请输入股票名称').trim(),
+  targetPrice: z.number().optional(),
   condition: z.enum(['above', 'below']),
   monitorType: z.enum(['price', 'premium', 'changePercent']),
   premiumThreshold: z.number().optional(),
   changePercentThreshold: z.number().optional()
 }).refine((data) => {
-  if (data.monitorType === 'premium' && !data.premiumThreshold) {
-    return false;
+  if (data.monitorType === 'price') {
+    return data.targetPrice && data.targetPrice > 0;
+  } else if (data.monitorType === 'premium') {
+    return data.premiumThreshold && data.premiumThreshold > 0;
+  } else if (data.monitorType === 'changePercent') {
+    return data.changePercentThreshold && data.changePercentThreshold > 0;
   }
-  if (data.monitorType === 'changePercent' && !data.changePercentThreshold) {
-    return false;
-  }
-  return true;
+  return false;
 }, {
-  message: '溢价监控需要设置溢价阈值，涨跌幅监控需要设置涨跌幅阈值',
-  path: ['premiumThreshold', 'changePercentThreshold']
+  message: '请根据监控类型设置相应的有效值',
+  path: ['monitorType']
 });
 
 type AddMonitorFormData = z.infer<typeof addMonitorSchema>;
@@ -74,7 +75,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
       reset({
         code: editMonitor.code,
         name: editMonitor.name,
-        targetPrice: editMonitor.targetPrice,
+        targetPrice: editMonitor.targetPrice || 0,
         condition: editMonitor.condition,
         monitorType: editMonitor.monitorType,
         premiumThreshold: editMonitor.premiumThreshold,
@@ -85,7 +86,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
       reset({
         code: '',
         name: '',
-        targetPrice: 0,
+        targetPrice: undefined,
         condition: 'above',
         monitorType: 'price',
         premiumThreshold: undefined,
@@ -123,41 +124,110 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
     setIsLoading(true);
     
     try {
+      // 验证必填字段
+      if (!data.code.trim()) {
+        toast.error('请输入股票代码');
+        return;
+      }
+      
+      if (!data.name.trim()) {
+        toast.error('请输入股票名称');
+        return;
+      }
+      
+      // 根据监控类型验证相应字段
+      if (data.monitorType === 'price') {
+        if (!data.targetPrice || data.targetPrice <= 0) {
+          toast.error('请输入有效的目标价格');
+          return;
+        }
+      } else if (data.monitorType === 'premium') {
+        if (!data.premiumThreshold || data.premiumThreshold <= 0) {
+          toast.error('请输入有效的溢价阈值');
+          return;
+        }
+      } else if (data.monitorType === 'changePercent') {
+        if (!data.changePercentThreshold || data.changePercentThreshold <= 0) {
+          toast.error('请输入有效的涨跌幅阈值');
+          return;
+        }
+      }
+      
       const formattedCode = formatStockCode(data.code);
       
       if (isEditMode && editMonitor) {
         // 编辑模式
-        updateStockMonitor(editMonitor.id, {
-          code: formattedCode,
-          name: data.name,
-          targetPrice: data.targetPrice,
-          condition: data.condition,
-          monitorType: data.monitorType,
-          premiumThreshold: data.premiumThreshold,
-          changePercentThreshold: data.changePercentThreshold
-        });
-        toast.success('监控更新成功！');
-        onOpenChange(false);
+        try {
+          const updateData: any = {
+            code: formattedCode,
+            name: data.name,
+            condition: data.condition,
+            monitorType: data.monitorType
+          };
+          
+          // 根据监控类型添加相应字段
+          if (data.monitorType === 'price') {
+            updateData.targetPrice = data.targetPrice;
+          } else if (data.monitorType === 'premium') {
+            updateData.premiumThreshold = data.premiumThreshold;
+          } else if (data.monitorType === 'changePercent') {
+            updateData.changePercentThreshold = data.changePercentThreshold;
+          }
+          
+          const updated = updateStockMonitor(editMonitor.id, updateData);
+          
+          if (updated) {
+            toast.success('监控更新成功！');
+            onOpenChange(false);
+            onMonitorAdded();
+          } else {
+            toast.error('更新监控失败，请重试');
+          }
+        } catch (updateError) {
+          console.error('更新监控时发生错误:', updateError);
+          const errorMessage = updateError instanceof Error ? updateError.message : '更新监控失败，请重试';
+          toast.error(errorMessage);
+        }
       } else {
         // 添加模式
-        addStockMonitor({
-          code: formattedCode,
-          name: data.name,
-          targetPrice: data.targetPrice,
-          condition: data.condition,
-          monitorType: data.monitorType,
-          premiumThreshold: data.premiumThreshold,
-          changePercentThreshold: data.changePercentThreshold,
-          isActive: true,
-          notificationSent: false
-        });
-        toast.success('监控添加成功！');
-        onOpenChange(false);
+        try {
+          const monitorData: any = {
+            code: formattedCode,
+            name: data.name,
+            condition: data.condition,
+            monitorType: data.monitorType,
+            isActive: true,
+            notificationSent: false
+          };
+          
+          // 根据监控类型添加相应字段
+          if (data.monitorType === 'price') {
+            monitorData.targetPrice = data.targetPrice;
+          } else if (data.monitorType === 'premium') {
+            monitorData.premiumThreshold = data.premiumThreshold;
+          } else if (data.monitorType === 'changePercent') {
+            monitorData.changePercentThreshold = data.changePercentThreshold;
+          }
+          
+          const newMonitor = addStockMonitor(monitorData);
+          
+          if (newMonitor && newMonitor.id) {
+            toast.success('监控添加成功！');
+            onOpenChange(false);
+            onMonitorAdded();
+          } else {
+            toast.error('添加监控失败，请重试');
+          }
+        } catch (addError) {
+          console.error('添加监控时发生错误:', addError);
+          const errorMessage = addError instanceof Error ? addError.message : '添加监控失败，请检查输入数据后重试';
+          toast.error(errorMessage);
+        }
       }
-      
-      onMonitorAdded();
-    } catch {
-      toast.error(isEditMode ? '更新监控失败，请重试' : '添加监控失败，请重试');
+    } catch (error) {
+      console.error('提交表单时发生错误:', error);
+      const errorMessage = error instanceof Error ? error.message : (isEditMode ? '更新监控失败，请重试' : '添加监控失败，请重试');
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -229,10 +299,14 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
                   clearErrors('premiumThreshold');
                   clearErrors('changePercentThreshold');
                 } else if (value === 'premium') {
+                  setValue('targetPrice', 0);
                   setValue('changePercentThreshold', undefined);
+                  clearErrors('targetPrice');
                   clearErrors('changePercentThreshold');
                 } else if (value === 'changePercent') {
+                  setValue('targetPrice', 0);
                   setValue('premiumThreshold', undefined);
+                  clearErrors('targetPrice');
                   clearErrors('premiumThreshold');
                 }
               }}
@@ -313,6 +387,22 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
               </SelectContent>
             </Select>
           </div>
+
+          {/* 通用错误显示区域 */}
+          {Object.keys(errors).length > 0 && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm font-medium text-red-800 mb-2">请修正以下错误：</p>
+              <ul className="text-sm text-red-700 space-y-1">
+                {errors.code && <li>• {errors.code.message}</li>}
+                {errors.name && <li>• {errors.name.message}</li>}
+                {errors.targetPrice && <li>• {errors.targetPrice.message}</li>}
+                {errors.premiumThreshold && <li>• {errors.premiumThreshold.message}</li>}
+                {errors.changePercentThreshold && <li>• {errors.changePercentThreshold.message}</li>}
+                {errors.monitorType && <li>• {errors.monitorType.message}</li>}
+                {errors.condition && <li>• {errors.condition.message}</li>}
+              </ul>
+            </div>
+          )}
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>

@@ -45,7 +45,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       }
     } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
       // 溢价监控
-      const currentPremium = Math.abs(stockData.premium);
+      const currentPremium = stockData.premium; // 直接使用溢价字段，不使用绝对值
       if (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) {
         shouldNotify = true;
       } else if (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold) {
@@ -71,7 +71,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       } else if (monitor.monitorType === 'premium') {
         const conditionText = monitor.condition === 'above' ? '高于' : '低于';
         notificationTitle = '股票溢价提醒';
-        notificationBody = `${monitor.name}(${monitor.code}) 当前涨跌幅 ${stockData.changePercent.toFixed(2)}% 已${conditionText}阈值 ${monitor.premiumThreshold?.toFixed(3)}%`;
+        notificationBody = `${monitor.name}(${monitor.code}) 当前溢价 ${stockData.premium.toFixed(2)}% 已${conditionText}阈值 ${monitor.premiumThreshold?.toFixed(2)}%`;
       } else {
         const conditionText = monitor.condition === 'above' ? '高于' : '低于';
         notificationTitle = '股票涨跌幅提醒';
@@ -183,7 +183,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
               isTriggered = (monitor.condition === 'above' && currentData.currentPrice >= monitor.targetPrice) ||
                            (monitor.condition === 'below' && currentData.currentPrice <= monitor.targetPrice);
             } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
-              const currentPremium = Math.abs(currentData.changePercent);
+              const currentPremium = currentData.premium; // 使用premium字段，不使用涨跌幅的绝对值
               isTriggered = (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) ||
                            (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold);
             } else if (monitor.monitorType === 'changePercent' && monitor.changePercentThreshold !== undefined) {
