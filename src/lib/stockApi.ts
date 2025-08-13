@@ -2,62 +2,39 @@ import { StockData } from '@/types/stock';
 
 const STOCK_API_BASE = 'https://qt.gtimg.cn/q=';
 
-// 解码股票名称，处理乱码问题
-function decodeStockName(name: string): string {
-  if (!name) return '';
-  
+// 从东方财富API获取股票名称（备用方案）
+async function fetchStockNameFromEastmoney(code: string): Promise<string | null> {
   try {
-    // 首先尝试直接返回，看是否已经是正确编码
-    if (/^[\u4e00-\u9fa5a-zA-Z0-9\s\-\(\)]+$/.test(name)) {
-      return name;
+    // 转换代码格式
+    let apiCode = code;
+    if (code.startsWith('sz')) {
+      apiCode = `0.${code.substring(2)}`;
+    } else if (code.startsWith('sh')) {
+      apiCode = `1.${code.substring(2)}`;
     }
     
-    // 尝试使用 decodeURIComponent 解码
-    try {
-      const decoded = decodeURIComponent(name);
-      if (decoded && decoded !== name) {
-        return decoded;
-      }
-    } catch {}
+    const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${apiCode}&fields=f58`;
+    console.log('正在从东方财富API获取股票名称:', url);
     
-    // 尝试使用 unescape 解码
-    try {
-      const unescaped = unescape(name);
-      if (unescaped && unescaped !== name) {
-        return unescaped;
-      }
-    } catch {}
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
     
-    // 尝试处理可能的GBK编码（通过URL编码转换）
-    try {
-      // 如果名称包含 % 字符，可能是URL编码
-      if (name.includes('%')) {
-        const decoded = decodeURIComponent(name);
-        if (decoded && decoded !== name) {
-          return decoded;
-        }
-      }
-    } catch {}
+    const data = await response.json();
+    console.log('东方财富API响应:', data);
     
-    // 尝试处理可能的Unicode转义序列
-    try {
-      if (name.includes('\\u')) {
-        const unicodeDecoded = name.replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
-          return String.fromCharCode(parseInt(hex, 16));
-        });
-        if (unicodeDecoded && unicodeDecoded !== name) {
-          return unicodeDecoded;
-        }
-      }
-    } catch {}
+    if (data.data && data.data.f58) {
+      const stockName = data.data.f58;
+      console.log('从东方财富API获取到的股票名称:', stockName);
+      return stockName;
+    }
     
-    // 如果所有方法都失败，记录警告并返回原始名称
-    console.warn('无法解码股票名称，可能存在编码问题:', name);
-    return name;
+    return null;
     
   } catch (error) {
-    console.error('解码股票名称时发生错误:', error);
-    return name;
+    console.error('从东方财富API获取股票名称失败:', error);
+    return null;
   }
 }
 
@@ -99,15 +76,12 @@ export async function fetchStockData(code: string): Promise<StockData | null> {
     }
     
     const changePercent = parseFloat(data[32]) || 0;
-    const rawName = data[1];
-    const decodedName = decodeStockName(rawName);
-    
-    console.log('原始名称:', rawName);
-    console.log('解码后名称:', decodedName);
+    let finalName = ''
+    finalName = await fetchStockNameFromEastmoney(code) || '';
     
     const stockData: StockData = {
       code: data[0],
-      name: decodedName,
+      name: finalName,
       currentPrice: parseFloat(data[3]) || 0,
       change: parseFloat(data[31]) || 0,
       changePercent: changePercent,
