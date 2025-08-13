@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 股票价格监控系统
 
-## Getting Started
+一个基于 Next.js 和 Shadcn/ui 的股票价格监控应用，支持实时监控股票价格和溢价变化，达到预设条件时自动发送桌面通知。
 
-First, run the development server:
+## 功能特性
 
+### 🎯 监控类型
+- **价格监控**：监控股票价格达到目标值
+- **溢价监控**：监控股票涨跌幅达到设定阈值
+
+### 📊 实时数据
+- 每10秒自动更新股票数据
+- 支持深圳（sz）和上海（sh）股票代码
+- 自动获取股票名称和实时价格信息
+
+### 🔔 智能通知
+- 达到监控条件时自动发送桌面通知
+- 支持价格高于/低于目标价格
+- 支持溢价高于/低于设定阈值
+- 通知状态管理，避免重复通知
+
+### 🛠️ 管理功能
+- 添加、编辑、删除监控任务
+- 暂停/启用监控
+- 重置通知状态
+- 本地存储，数据持久化
+
+## 技术栈
+
+- **前端框架**：Next.js 15 + React 19
+- **UI组件库**：Shadcn/ui + Tailwind CSS
+- **表单处理**：React Hook Form + Zod
+- **状态管理**：React Hooks
+- **通知系统**：Web Notifications API
+- **数据存储**：LocalStorage
+
+## 快速开始
+
+### 安装依赖
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 启动开发服务器
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 构建生产版本
+```bash
+npm run build
+npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 使用方法
 
-## Learn More
+### 1. 添加监控
+1. 在左侧表单中输入股票代码（如：159509 或 sz159509）
+2. 点击搜索按钮自动获取股票名称
+3. 选择监控类型（价格监控或溢价监控）
+4. 设置目标值（价格或溢价阈值）
+5. 选择监控条件（高于或低于）
+6. 点击"添加监控"按钮
 
-To learn more about Next.js, take a look at the following resources:
+### 2. 管理监控
+- **编辑**：点击监控卡片上的编辑按钮
+- **暂停/启用**：使用开关按钮控制监控状态
+- **删除**：点击删除按钮移除监控任务
+- **重置通知**：对于已触发的监控，可以重置通知状态
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. 监控类型说明
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+#### 价格监控
+- 监控股票价格达到设定的目标价格
+- 支持价格高于或低于目标价格时通知
 
-## Deploy on Vercel
+#### 溢价监控
+- 监控股票涨跌幅达到设定的阈值
+- 使用绝对值计算，无论涨跌都有效
+- 支持溢价高于或低于阈值时通知
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 股票代码格式
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **深圳股票**：sz + 股票代码（如：sz159509）
+- **上海股票**：sh + 股票代码（如：sh600000）
+- 系统会自动为未添加前缀的代码添加"sz"前缀
+
+## 数据接口
+
+使用腾讯股票接口获取实时数据：
+- 基础URL：`https://qt.gtimg.cn/q=`
+- 示例：`https://qt.gtimg.cn/q=sz159509`
+
+## 注意事项
+
+1. **通知权限**：首次使用需要允许浏览器发送桌面通知
+2. **数据更新**：股票数据每10秒自动更新一次
+3. **本地存储**：所有监控配置保存在浏览器本地存储中
+4. **网络要求**：需要网络连接以获取实时股票数据
+
+## 开发说明
+
+### 项目结构
+```
+src/
+├── app/                 # Next.js 应用页面
+├── components/          # React 组件
+│   ├── ui/             # Shadcn/ui 基础组件
+│   ├── AddMonitorForm.tsx  # 添加/编辑监控表单
+│   └── MonitorList.tsx     # 监控列表组件
+├── lib/                 # 工具函数
+│   ├── stockApi.ts     # 股票API接口
+│   ├── stockMonitor.ts # 监控数据管理
+│   └── notifications.ts # 通知功能
+└── types/               # TypeScript 类型定义
+    └── stock.ts        # 股票相关类型
+```
+
+### 主要组件
+
+- **AddMonitorForm**：添加和编辑监控的表单组件
+- **MonitorList**：显示和管理监控任务的列表组件
+- **stockApi**：处理股票数据获取和API调用
+- **stockMonitor**：管理监控数据的本地存储
+- **notifications**：处理桌面通知功能
+
+## 许可证
+
+MIT License
