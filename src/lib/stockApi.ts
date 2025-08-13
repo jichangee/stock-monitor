@@ -89,7 +89,7 @@ export async function fetchStockData(code: string): Promise<StockData | null> {
       high: parseFloat(data[33]) || 0,
       low: parseFloat(data[34]) || 0,
       volume: parseFloat(data[6]) || 0,
-      premium: Math.abs(parseFloat(data[77]) || 0), // 溢价使用涨跌幅的绝对值
+      premium: parseFloat(data[77]) || 0, // 溢价
       timestamp: Date.now()
     };
     
