@@ -10,7 +10,7 @@ import { fetchStockData } from '@/lib/stockApi';
 import { sendNotification } from '@/lib/notifications';
 import { StockMonitor, StockData } from '@/types/stock';
 import { toast } from 'sonner';
-import { Trash2, BellOff, Edit, TrendingUp, DollarSign, AlertCircle } from 'lucide-react';
+import { Trash2, BellOff, Edit, TrendingUp, DollarSign, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface MonitorListProps {
   refreshTrigger: number;
@@ -169,165 +169,194 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
           variant="outline"
           size="sm"
         >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           {isLoading ? '更新中...' : '手动更新'}
         </Button>
       </div>
       
-      <div className="grid gap-4">
-        {monitors.map((monitor) => {
-          const currentData = stockData[monitor.code];
-          let isTriggered = false;
-          
-          if (currentData) {
-            if (monitor.monitorType === 'price') {
-              isTriggered = (monitor.condition === 'above' && currentData.currentPrice >= monitor.targetPrice) ||
-                           (monitor.condition === 'below' && currentData.currentPrice <= monitor.targetPrice);
-            } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
-              const currentPremium = currentData.premium; // 使用premium字段，不使用涨跌幅的绝对值
-              isTriggered = (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) ||
-                           (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold);
-            } else if (monitor.monitorType === 'changePercent' && monitor.changePercentThreshold !== undefined) {
-              isTriggered = (monitor.condition === 'above' && currentData.changePercent >= monitor.changePercentThreshold) ||
-                           (monitor.condition === 'below' && currentData.changePercent <= monitor.changePercentThreshold);
-            }
-          }
-          
-          return (
-            <Card key={monitor.id} className={`${isTriggered ? 'border-green-500 bg-green-50 dark:bg-green-950' : ''}`}>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2">
-                    {monitor.monitorType === 'price' ? (
-                      <DollarSign className="h-5 w-5 text-blue-600" />
-                    ) : monitor.monitorType === 'premium' ? (
-                      <TrendingUp className="h-5 w-5 text-orange-600" />
-                    ) : (
-                      <TrendingUp className="h-5 w-5 text-purple-600" />
-                    )}
-                    <div>
-                      <CardTitle className="text-lg">{monitor.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{monitor.code}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={monitor.isActive}
-                      onCheckedChange={() => toggleMonitor(monitor)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(monitor)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(monitor)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* 监控配置信息 */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {monitor.monitorType === 'price' ? '目标价格' : 
-                       monitor.monitorType === 'premium' ? '溢价阈值' : '涨跌幅阈值'}
-                    </p>
-                    <p className="font-semibold">
-                      {monitor.monitorType === 'price' 
-                        ? monitor.targetPrice.toFixed(3)
-                        : monitor.monitorType === 'premium'
-                        ? `${monitor.premiumThreshold?.toFixed(3)}%`
-                        : `${monitor.changePercentThreshold?.toFixed(2)}%`
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">监控条件</p>
-                    <p className="font-semibold">
-                      {monitor.condition === 'above' 
-                        ? (monitor.monitorType === 'price' ? '价格高于目标' : 
-                           monitor.monitorType === 'premium' ? '溢价高于阈值' : '涨跌幅高于阈值')
-                        : (monitor.monitorType === 'price' ? '价格低于目标' : 
-                           monitor.monitorType === 'premium' ? '溢价低于阈值' : '涨跌幅低于阈值')
-                      }
-                    </p>
-                  </div>
-                </div>
+      {/* 表格形式的监控列表 */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 border-b">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">股票</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">监控类型</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">目标值</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">当前价格</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">涨跌幅</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">溢价</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">状态</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {monitors.map((monitor) => {
+                const currentData = stockData[monitor.code];
+                let isTriggered = false;
                 
-                {/* 实时数据信息 - 常显 */}
-                <div className="bg-muted/50 rounded-lg p-4 mb-4">
-                  <h4 className="font-medium text-sm mb-3 text-foreground">实时数据</h4>
-                  {currentData ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">当前股价</p>
-                        <p className={`font-semibold text-lg ${isTriggered ? 'text-green-600' : 'text-foreground'}`}>
-                          ¥{currentData.currentPrice.toFixed(3)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">涨跌幅</p>
-                        <p className={`font-semibold text-lg ${currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">最高价</p>
-                        <p className="font-semibold">¥{currentData.high.toFixed(3)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">当前溢价</p>
-                        <p className="font-semibold">{currentData.premium.toFixed(3)}%</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">暂无实时数据，点击&ldquo;手动更新&rdquo;获取最新数据</span>
-                    </div>
-                  )}
-                </div>
+                if (currentData) {
+                  if (monitor.monitorType === 'price') {
+                    isTriggered = (monitor.condition === 'above' && currentData.currentPrice >= monitor.targetPrice) ||
+                                 (monitor.condition === 'below' && currentData.currentPrice <= monitor.targetPrice);
+                  } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
+                    const currentPremium = currentData.premium;
+                    isTriggered = (monitor.condition === 'above' && currentPremium >= monitor.premiumThreshold) ||
+                                 (monitor.condition === 'below' && currentPremium <= monitor.premiumThreshold);
+                  } else if (monitor.monitorType === 'changePercent' && monitor.changePercentThreshold !== undefined) {
+                    isTriggered = (monitor.condition === 'above' && currentData.changePercent >= monitor.changePercentThreshold) ||
+                                 (monitor.condition === 'below' && currentData.changePercent <= monitor.changePercentThreshold);
+                  }
+                }
                 
-                {/* 状态和操作 */}
-                <div className="flex justify-between items-center">
-                  <div className="flex gap-2">
-                    <Badge variant={monitor.isActive ? 'default' : 'secondary'}>
-                      {monitor.isActive ? '监控中' : '已暂停'}
-                    </Badge>
-                    <Badge variant="outline" className="text-blue-600 border-blue-600">
-                      {monitor.monitorType === 'price' ? '价格监控' : 
-                       monitor.monitorType === 'premium' ? '溢价监控' : '涨跌幅监控'}
-                    </Badge>
-                    {monitor.notificationSent && (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
-                        已通知
+                return (
+                  <tr 
+                    key={monitor.id} 
+                    className={`hover:bg-muted/30 transition-colors ${
+                      isTriggered ? 'bg-green-50 dark:bg-green-950/20' : ''
+                    }`}
+                  >
+                    {/* 股票信息 */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {monitor.monitorType === 'price' ? (
+                          <DollarSign className="h-4 w-4 text-blue-600" />
+                        ) : monitor.monitorType === 'premium' ? (
+                          <TrendingUp className="h-4 w-4 text-orange-600" />
+                        ) : (
+                          <TrendingUp className="h-4 w-4 text-purple-600" />
+                        )}
+                        <div>
+                          <div className="font-medium">{monitor.name}</div>
+                          <div className="text-sm text-muted-foreground">{monitor.code}</div>
+                        </div>
+                      </div>
+                    </td>
+                    
+                    {/* 监控类型 */}
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="text-xs">
+                        {monitor.monitorType === 'price' ? '价格监控' : 
+                         monitor.monitorType === 'premium' ? '溢价监控' : '涨跌幅监控'}
                       </Badge>
-                    )}
-                  </div>
-                  
-                  {monitor.notificationSent && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => resetNotification(monitor)}
-                    >
-                      <BellOff className="h-4 w-4 mr-1" />
-                      重置通知
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                    </td>
+                    
+                    {/* 目标值 */}
+                    <td className="px-4 py-3">
+                      <div className="text-sm">
+                        <div className="font-medium">
+                          {monitor.monitorType === 'price' 
+                            ? `¥${monitor.targetPrice.toFixed(3)}`
+                            : monitor.monitorType === 'premium'
+                            ? `${monitor.premiumThreshold?.toFixed(2)}%`
+                            : `${monitor.changePercentThreshold?.toFixed(2)}%`
+                          }
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {monitor.condition === 'above' ? '高于目标' : '低于目标'}
+                        </div>
+                      </div>
+                    </td>
+                    
+                    {/* 当前价格 */}
+                    <td className="px-4 py-3">
+                      {currentData ? (
+                        <div className={`font-medium ${isTriggered ? 'text-green-600' : ''}`}>
+                          ¥{currentData.currentPrice.toFixed(3)}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground text-sm">--</div>
+                      )}
+                    </td>
+                    
+                    {/* 涨跌幅 */}
+                    <td className="px-4 py-3">
+                      {currentData ? (
+                        <div className={`font-medium ${
+                          currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground text-sm">--</div>
+                      )}
+                    </td>
+                    
+                    {/* 溢价 */}
+                    <td className="px-4 py-3">
+                      {currentData ? (
+                        <div className="font-medium">{currentData.premium.toFixed(2)}%</div>
+                      ) : (
+                        <div className="text-muted-foreground text-sm">--</div>
+                      )}
+                    </td>
+                    
+                    {/* 状态 */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={monitor.isActive}
+                            onCheckedChange={() => toggleMonitor(monitor)}
+                          />
+                          <Badge variant={monitor.isActive ? 'default' : 'secondary'} className="text-xs">
+                            {monitor.isActive ? '监控中' : '已暂停'}
+                          </Badge>
+                        </div>
+                        {monitor.notificationSent && (
+                          <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
+                            已通知
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* 操作 */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(monitor)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        {monitor.notificationSent && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => resetNotification(monitor)}
+                            className="h-8 w-8 p-0"
+                            title="重置通知"
+                          >
+                            <BellOff className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(monitor)}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
+      
+      {/* 数据更新时间提示 */}
+      {monitors.length > 0 && (
+        <div className="text-xs text-muted-foreground text-center">
+          数据每10秒自动更新，触发条件的监控项会高亮显示
+        </div>
+      )}
     </div>
   );
 }
