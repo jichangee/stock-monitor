@@ -16,7 +16,7 @@ export interface StockMonitor {
   id: string;
   code: string;
   name: string;
-  targetPrice: number;
+  targetPrice?: number; // 价格监控时使用
   condition: 'above' | 'below';
   monitorType: 'price' | 'premium' | 'changePercent'; // 新增：监控类型
   premiumThreshold?: number; // 新增：溢价阈值（百分比）

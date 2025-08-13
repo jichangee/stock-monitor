@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { fetchStockData } from '@/lib/stockApi';
 import { sendNotification } from '@/lib/notifications';
 import { StockMonitor, StockData } from '@/types/stock';
 import { toast } from 'sonner';
-import { Trash2, BellOff, Edit, TrendingUp, DollarSign, AlertCircle, RefreshCw } from 'lucide-react';
+import { Trash2, BellOff, Edit, TrendingUp, DollarSign, RefreshCw } from 'lucide-react';
 
 interface MonitorListProps {
   refreshTrigger: number;
@@ -36,7 +36,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     
     let shouldNotify = false;
     
-    if (monitor.monitorType === 'price') {
+    if (monitor.monitorType === 'price' && monitor.targetPrice !== undefined) {
       // 价格监控
       if (monitor.condition === 'above' && stockData.currentPrice >= monitor.targetPrice) {
         shouldNotify = true;
@@ -64,7 +64,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       let notificationTitle = '';
       let notificationBody = '';
       
-      if (monitor.monitorType === 'price') {
+      if (monitor.monitorType === 'price' && monitor.targetPrice !== undefined) {
         const conditionText = monitor.condition === 'above' ? '高于' : '低于';
         notificationTitle = '股票价格提醒';
         notificationBody = `${monitor.name}(${monitor.code}) 当前价格 ${stockData.currentPrice.toFixed(3)} 已${conditionText}目标价格 ${monitor.targetPrice.toFixed(3)}`;
@@ -196,7 +196,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                 let isTriggered = false;
                 
                 if (currentData) {
-                  if (monitor.monitorType === 'price') {
+                  if (monitor.monitorType === 'price' && monitor.targetPrice !== undefined) {
                     isTriggered = (monitor.condition === 'above' && currentData.currentPrice >= monitor.targetPrice) ||
                                  (monitor.condition === 'below' && currentData.currentPrice <= monitor.targetPrice);
                   } else if (monitor.monitorType === 'premium' && monitor.premiumThreshold !== undefined) {
@@ -246,7 +246,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       <div className="text-sm">
                         <div className="font-medium">
                           {monitor.monitorType === 'price' 
-                            ? `¥${monitor.targetPrice.toFixed(3)}`
+                            ? `¥${monitor.targetPrice?.toFixed(3) || '--'}`
                             : monitor.monitorType === 'premium'
                             ? `${monitor.premiumThreshold?.toFixed(2)}%`
                             : `${monitor.changePercentThreshold?.toFixed(2)}%`

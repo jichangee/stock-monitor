@@ -158,12 +158,12 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
       if (isEditMode && editMonitor) {
         // 编辑模式
         try {
-          const updateData: any = {
-            code: formattedCode,
-            name: data.name,
-            condition: data.condition,
-            monitorType: data.monitorType
-          };
+                  const updateData: Partial<StockMonitor> = {
+          code: formattedCode,
+          name: data.name,
+          condition: data.condition,
+          monitorType: data.monitorType
+        };
           
           // 根据监控类型添加相应字段
           if (data.monitorType === 'price') {
@@ -191,14 +191,24 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
       } else {
         // 添加模式
         try {
-          const monitorData: any = {
-            code: formattedCode,
-            name: data.name,
-            condition: data.condition,
-            monitorType: data.monitorType,
-            isActive: true,
-            notificationSent: false
-          };
+                  const monitorData: {
+          code: string;
+          name: string;
+          condition: 'above' | 'below';
+          monitorType: 'price' | 'premium' | 'changePercent';
+          isActive: boolean;
+          notificationSent: boolean;
+          targetPrice?: number;
+          premiumThreshold?: number;
+          changePercentThreshold?: number;
+        } = {
+          code: formattedCode,
+          name: data.name,
+          condition: data.condition,
+          monitorType: data.monitorType,
+          isActive: true,
+          notificationSent: false
+        };
           
           // 根据监控类型添加相应字段
           if (data.monitorType === 'price') {
