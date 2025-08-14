@@ -106,22 +106,22 @@ export function IndexMonitor() {
   }
 
   return (
-    <Card className="mb-6">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">主要指数</h3>
+    <Card className="mb-4">
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold">主要指数</h3>
           <Badge variant="outline" className="text-xs">
             {isWithinTradingHours() ? '实时更新' : '非交易时间'}
           </Badge>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {INDEX_CODES.map((index) => {
             const data = indexData[index.code];
             
             return (
-              <div key={index.code} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
+              <div key={index.code} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2">
                   {data ? getChangeIcon(data.changePercent) : <Minus className="h-4 w-4 text-gray-400" />}
                   <div>
                     <div className="font-medium text-sm">{index.name}</div>
@@ -155,7 +155,7 @@ export function IndexMonitor() {
         </div>
         
         {isLoading && (
-          <div className="text-center text-xs text-muted-foreground mt-3">
+          <div className="text-center text-xs text-muted-foreground mt-2">
             正在更新指数数据...
           </div>
         )}

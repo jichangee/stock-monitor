@@ -201,6 +201,33 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     }
   };
 
+  const getCurrentValue = (metric: MonitorMetric, data: StockData | undefined) => {
+    if (!data) return null;
+
+    switch (metric.type) {
+      case 'price':
+        return {
+          value: data.currentPrice,
+          unit: '¥',
+          format: (val: number) => val.toFixed(3)
+        };
+      case 'premium':
+        return {
+          value: data.premium,
+          unit: '%',
+          format: (val: number) => val.toFixed(2)
+        };
+      case 'changePercent':
+        return {
+          value: data.changePercent,
+          unit: '%',
+          format: (val: number) => val.toFixed(2)
+        };
+      default:
+        return null;
+    }
+  };
+
   if (monitors.length === 0) {
     return (
       <Card className="w-full">
@@ -214,253 +241,219 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   }
 
   return (
-    <div className="space-y-4">
-      {/* 交易状态显示 */}
-      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+    <div className="space-y-3">
+      
+      <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4" />
           <span className="text-sm font-medium">{getTradingStatus()}</span>
         </div>
-        <Button 
-          onClick={updateStockData} 
-          disabled={isLoading || !isWithinTradingHours()}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? '更新中...' : '手动更新'}
-        </Button>
-      </div>
-      
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">监控列表</h2>
-        <div className="text-sm text-muted-foreground">
-          共 {monitors.length} 个监控项目
+        <div className="flex items-center gap-2">
+          
+          <Button 
+            onClick={updateStockData} 
+            disabled={isLoading || !isWithinTradingHours()}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? '更新中...' : '手动更新'}
+          </Button>
+          <div className="text-sm text-muted-foreground">
+            共 {monitors.length} 个监控项目
+          </div>
         </div>
       </div>
       
-      {/* 监控列表 */}
-      <div className="space-y-4">
-        {monitors.map((monitor) => {
-          const currentData = stockData[monitor.code];
-          const activeMetrics = monitor.metrics.filter(m => m.isActive);
-          const triggeredMetrics = monitor.metrics.filter(metric => {
-            if (!currentData || !metric.isActive || metric.notificationSent) return false;
+      {/* 监控列表 - 改为列表形式 */}
+      <div className="bg-card border rounded-lg overflow-hidden">
+        <div className="bg-muted/50 px-4 py-2 border-b">
+          <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground">
+            <div className="col-span-3">股票信息</div>
+            <div className="col-span-2">当前价格</div>
+            <div className="col-span-2">涨跌幅</div>
+            <div className="col-span-2">溢价</div>
+            <div className="col-span-2">监控指标</div>
+            <div className="col-span-1">操作</div>
+          </div>
+        </div>
+        
+        <div className="divide-y">
+          {monitors.map((monitor) => {
+            const currentData = stockData[monitor.code];
+            const activeMetrics = monitor.metrics.filter(m => m.isActive);
+            const triggeredMetrics = monitor.metrics.filter(metric => {
+              if (!currentData || !metric.isActive || metric.notificationSent) return false;
+              
+              switch (metric.type) {
+                case 'price':
+                  if (metric.condition === 'above') {
+                    return currentData.currentPrice >= (metric.targetPrice || 0);
+                  } else {
+                    return currentData.currentPrice <= (metric.targetPrice || 0);
+                  }
+                case 'premium':
+                  if (metric.condition === 'above') {
+                    return currentData.premium >= (metric.premiumThreshold || 0);
+                  } else {
+                    return currentData.premium <= (metric.premiumThreshold || 0);
+                  }
+                case 'changePercent':
+                  if (metric.condition === 'above') {
+                    return currentData.changePercent >= (metric.changePercentThreshold || 0);
+                  } else {
+                    return currentData.changePercent <= (metric.changePercentThreshold || 0);
+                  }
+                default:
+                  return false;
+              }
+            });
             
-            switch (metric.type) {
-              case 'price':
-                if (metric.condition === 'above') {
-                  return currentData.currentPrice >= (metric.targetPrice || 0);
-                } else {
-                  return currentData.currentPrice <= (metric.targetPrice || 0);
-                }
-              case 'premium':
-                if (metric.condition === 'above') {
-                  return currentData.premium >= (metric.premiumThreshold || 0);
-                } else {
-                  return currentData.premium <= (metric.premiumThreshold || 0);
-                }
-              case 'changePercent':
-                if (metric.condition === 'above') {
-                  return currentData.changePercent >= (metric.changePercentThreshold || 0);
-                } else {
-                  return currentData.changePercent <= (metric.changePercentThreshold || 0);
-                }
-              default:
-                return false;
-            }
-          });
-          
-          return (
-            <Card key={monitor.id} className={`transition-all ${
-              triggeredMetrics.length > 0 ? 'ring-2 ring-green-500 bg-green-50 dark:bg-green-950/20' : ''
-            }`}>
-              <CardContent className="p-6">
-                {/* 监控头部 */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
+            return (
+              <div key={monitor.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${
+                triggeredMetrics.length > 0 ? 'bg-green-50 dark:bg-green-950/20' : ''
+              }`}>
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  {/* 股票信息 */}
+                  <div className="col-span-3">
                     <div className="flex items-center gap-2">
-                      <div className="font-semibold text-lg">{monitor.name}</div>
-                      <Badge variant="outline" className="text-xs">
-                        {monitor.code}
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium text-sm">{monitor.name}</div>
+                        <Badge variant="outline" className="text-xs">
+                          {monitor.code}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Switch
+                        checked={monitor.isActive}
+                        onCheckedChange={() => toggleMonitor(monitor)}
+                        className="scale-75"
+                      />
+                      <Badge variant={monitor.isActive ? 'default' : 'secondary'} className="text-xs">
+                        {monitor.isActive ? '监控中' : '已暂停'}
                       </Badge>
                     </div>
-                    <Switch
-                      checked={monitor.isActive}
-                      onCheckedChange={() => toggleMonitor(monitor)}
-                    />
-                    <Badge variant={monitor.isActive ? 'default' : 'secondary'}>
-                      {monitor.isActive ? '监控中' : '已暂停'}
-                    </Badge>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(monitor)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(monitor)}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  {/* 当前价格 */}
+                  <div className="col-span-2">
+                    {currentData ? (
+                      <div className="font-semibold text-sm">¥{currentData.currentPrice.toFixed(3)}</div>
+                    ) : (
+                      <div className="text-muted-foreground text-sm">--</div>
+                    )}
                   </div>
-                </div>
-
-                {/* 当前股票数据 */}
-                {currentData && (
-                  <div className="grid grid-cols-4 gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
-                    <div className="text-center">
-                      <div className="text-sm text-muted-foreground">当前价格</div>
-                      <div className="font-semibold">¥{currentData.currentPrice.toFixed(3)}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-muted-foreground">涨跌幅</div>
-                      <div className={`font-semibold ${
+                  
+                  {/* 涨跌幅 */}
+                  <div className="col-span-2">
+                    {currentData ? (
+                      <div className={`font-semibold text-sm ${
                         currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
                       }`}>
                         {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
                       </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-muted-foreground">溢价</div>
-                      <div className="font-semibold">{currentData.premium.toFixed(2)}%</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-muted-foreground">更新时间</div>
-                      <div className="text-xs">{formatTime(new Date(currentData.timestamp))}</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 监控指标列表 */}
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-muted-foreground">
-                    监控指标 ({activeMetrics.length}/{monitor.metrics.length})
+                    ) : (
+                      <div className="text-muted-foreground text-sm">--</div>
+                    )}
                   </div>
                   
-                  {monitor.metrics.map((metric) => {
-                    // 获取当前指标数值
-                    const getCurrentValue = () => {
-                      if (!currentData) return null;
-                      
-                      switch (metric.type) {
-                        case 'price':
-                          return {
-                            value: currentData.currentPrice,
-                            unit: '¥',
-                            format: (val: number) => val.toFixed(3)
-                          };
-                        case 'premium':
-                          return {
-                            value: currentData.premium,
-                            unit: '%',
-                            format: (val: number) => val.toFixed(2)
-                          };
-                        case 'changePercent':
-                          return {
-                            value: currentData.changePercent,
-                            unit: '%',
-                            format: (val: number) => val.toFixed(2)
-                          };
-                        default:
-                          return null;
-                      }
-                    };
-
-                    const currentValue = getCurrentValue();
-                    const isTriggered = currentValue && (() => {
-                      switch (metric.type) {
-                        case 'price':
-                          if (metric.condition === 'above') {
-                            return currentValue.value >= (metric.targetPrice || 0);
-                          } else {
-                            return currentValue.value <= (metric.targetPrice || 0);
+                  {/* 溢价 */}
+                  <div className="col-span-2">
+                    {currentData ? (
+                      <div className="font-semibold text-sm">{currentData.premium.toFixed(2)}%</div>
+                    ) : (
+                      <div className="text-muted-foreground text-sm">--</div>
+                    )}
+                  </div>
+                  
+                  {/* 监控指标 */}
+                  <div className="col-span-2">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {activeMetrics.length}/{monitor.metrics.length} 个指标
+                    </div>
+                    <div className="space-y-1">
+                      {monitor.metrics.slice(0, 2).map((metric) => {
+                        const currentValue = getCurrentValue(metric, currentData);
+                        const isTriggered = currentValue && (() => {
+                          switch (metric.type) {
+                            case 'price':
+                              if (metric.condition === 'above') {
+                                return currentValue.value >= (metric.targetPrice || 0);
+                              } else {
+                                return currentValue.value <= (metric.targetPrice || 0);
+                              }
+                            case 'premium':
+                              if (metric.condition === 'above') {
+                                return currentValue.value >= (metric.premiumThreshold || 0);
+                              } else {
+                                return currentValue.value <= (metric.premiumThreshold || 0);
+                              }
+                            case 'changePercent':
+                              if (metric.condition === 'above') {
+                                return currentValue.value >= (metric.changePercentThreshold || 0);
+                              } else {
+                                return currentValue.value <= (metric.changePercentThreshold || 0);
+                              }
+                            default:
+                              return false;
                           }
-                        case 'premium':
-                          if (metric.condition === 'above') {
-                            return currentValue.value >= (metric.premiumThreshold || 0);
-                          } else {
-                            return currentValue.value <= (metric.premiumThreshold || 0);
-                          }
-                        case 'changePercent':
-                          if (metric.condition === 'above') {
-                            return currentValue.value >= (metric.changePercentThreshold || 0);
-                          } else {
-                            return currentValue.value <= (metric.changePercentThreshold || 0);
-                          }
-                        default:
-                          return false;
-                      }
-                    })();
-
-                    return (
-                      <div key={metric.id} className={`flex items-center justify-between p-3 border rounded-lg ${
-                        metric.notificationSent ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : ''
-                      } ${isTriggered ? 'ring-2 ring-orange-400 bg-orange-50 dark:bg-orange-950/20' : ''}`}>
-                        <div className="flex items-center gap-3">
-                          {getMetricIcon(metric.type)}
-                          <div>
-                            <div className="font-medium">{getMetricDisplayName(metric)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {metric.condition === 'above' ? '高于目标时通知' : '低于目标时通知'}
-                            </div>
-                            {/* 当前数值显示 */}
-                            {currentValue && (
-                              <div className="text-xs mt-1">
-                                <span className="text-muted-foreground">当前: </span>
-                                <span className={`font-medium ${
-                                  isTriggered ? 'text-orange-600' : 'text-foreground'
-                                }`}>
-                                  {currentValue.unit}{currentValue.format(currentValue.value)}
-                                </span>
-                                {isTriggered && (
-                                  <span className="text-orange-600 ml-1">⚠️ 已触发</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        })();
                         
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={metric.isActive}
-                            onCheckedChange={() => toggleMetric(monitor, metric.id)}
-                          />
-                          
-                          {metric.notificationSent && (
-                            <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
-                              已通知
-                            </Badge>
-                          )}
-                          
-                          {metric.notificationSent && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => resetMetricNotification(monitor, metric.id)}
-                              className="h-6 w-6 p-0"
-                              title="重置通知"
-                            >
-                              <BellOff className="h-3 w-3" />
-                            </Button>
-                          )}
+                        return (
+                          <div key={metric.id} className={`text-xs p-1 rounded ${
+                            metric.notificationSent ? 'bg-green-100 dark:bg-green-900/30' : ''
+                          } ${isTriggered ? 'bg-orange-100 dark:bg-orange-900/30' : ''}`}>
+                            <div className="flex items-center gap-1">
+                              {getMetricIcon(metric.type)}
+                              <span className="truncate">{getMetricDisplayName(metric)}</span>
+                              {isTriggered && <span className="text-orange-600">⚠️</span>}
+                              {metric.notificationSent && <span className="text-green-600">✓</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {monitor.metrics.length > 2 && (
+                        <div className="text-xs text-muted-foreground">
+                          +{monitor.metrics.length - 2} 更多...
                         </div>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* 操作按钮 */}
+                  <div className="col-span-1">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(monitor)}
+                        className="h-7 w-7 p-0"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(monitor)}
+                        className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                
+                {/* 更新时间 */}
+                {currentData && (
+                  <div className="text-xs text-muted-foreground mt-2">
+                    更新时间: {formatTime(new Date(currentData.timestamp))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
       
       {/* 数据更新时间提示 */}
