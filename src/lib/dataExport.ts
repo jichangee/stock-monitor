@@ -1,5 +1,6 @@
 import { StockMonitor } from '@/types/stock';
 import { getStockMonitors, saveStockMonitors } from './stockMonitor';
+import { generateUUID } from './utils';
 
 // 设置数据的接口定义
 export interface SettingsData {
@@ -114,7 +115,7 @@ export function importMonitorData(file: File): Promise<{ success: boolean; messa
             // 添加新监控
             mergedMonitors.push({
               ...importedMonitor,
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               createdAt: new Date(),
               updatedAt: new Date()
             });

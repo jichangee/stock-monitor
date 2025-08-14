@@ -1,5 +1,5 @@
-import { StockMonitor, MonitorMetric, LegacyStockMonitor, StockData } from '@/types/stock';
-import { isWithinTradingHours, isNewTradingDay } from '@/lib/utils';
+import { StockMonitor, MonitorMetric, LegacyStockMonitor } from '@/types/stock';
+import { generateUUID } from '@/lib/utils';
 
 const STORAGE_KEY = 'stock-monitors';
 
@@ -17,7 +17,7 @@ function migrateMonitorData(monitor: Record<string, unknown>): StockMonitor {
   // 旧版本数据迁移
   const legacyMonitor = monitor as unknown as LegacyStockMonitor;
   const metric: MonitorMetric = {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     type: legacyMonitor.monitorType,
     targetPrice: legacyMonitor.targetPrice,
     condition: legacyMonitor.condition,
@@ -96,7 +96,7 @@ export function addStockMonitor(monitor: Omit<StockMonitor, 'id' | 'createdAt' |
   try {
     const newMonitor: StockMonitor = {
       ...monitor,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -181,60 +181,6 @@ export function deleteStockMonitor(id: string): boolean {
   
   saveStockMonitors(filtered);
   return true;
-}
-
-// 检查监控条件是否满足
-export function checkMonitorConditions(monitor: StockMonitor, stockData: StockData): boolean {
-  // 检查是否在交易时间内
-  if (!isWithinTradingHours()) {
-    return false;
-  }
-  
-  // 检查是否为新的交易日，如果是则重置所有指标的通知状态
-  if (isNewTradingDay(monitor.lastNotificationDate)) {
-    resetMonitorNotifications(monitor.id);
-  }
-  
-  // 检查每个指标
-  for (const metric of monitor.metrics) {
-    if (!metric.isActive || metric.notificationSent) {
-      continue;
-    }
-    
-    let conditionMet = false;
-    
-    switch (metric.type) {
-      case 'price':
-        if (metric.condition === 'above') {
-          conditionMet = stockData.currentPrice >= (metric.targetPrice || 0);
-        } else {
-          conditionMet = stockData.currentPrice <= (metric.targetPrice || 0);
-        }
-        break;
-        
-      case 'premium':
-        if (metric.condition === 'above') {
-          conditionMet = stockData.premium >= (metric.premiumThreshold || 0);
-        } else {
-          conditionMet = stockData.premium <= (metric.premiumThreshold || 0);
-        }
-        break;
-        
-      case 'changePercent':
-        if (metric.condition === 'above') {
-          conditionMet = stockData.changePercent >= (metric.changePercentThreshold || 0);
-        } else {
-          conditionMet = stockData.changePercent <= (metric.changePercentThreshold || 0);
-        }
-        break;
-    }
-    
-    if (conditionMet) {
-      return true;
-    }
-  }
-  
-  return false;
 }
 
 // 重置监控的通知状态

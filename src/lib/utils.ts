@@ -6,6 +6,21 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// 兼容的 UUID 生成函数
+export function generateUUID(): string {
+  // 优先使用 crypto.randomUUID
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  
+  // 降级方案：使用 Math.random 生成伪随机 UUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // 检查是否为工作日（周一到周五）
 function isWeekday(date: dayjs.Dayjs): boolean {
   const day = date.day(); // 0 = 周日, 1 = 周一, ..., 6 = 周六

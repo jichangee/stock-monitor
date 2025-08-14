@@ -5,13 +5,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { getStockMonitors, updateStockMonitor, deleteStockMonitor, markMetricNotificationSent } from '@/lib/stockMonitor';
+import { getStockMonitors, updateStockMonitor, deleteStockMonitor, markMetricNotificationSent, resetMonitorNotifications } from '@/lib/stockMonitor';
 import { fetchBatchStockData } from '@/lib/stockApi';
 import { sendStockMonitorNotification } from '@/lib/notifications';
 import { StockMonitor, StockData, MonitorMetric } from '@/types/stock';
 import { toast } from 'sonner';
 import { Trash2, BellOff, Edit, TrendingUp, DollarSign, RefreshCw, Clock, AlertCircle } from 'lucide-react';
-import { isWithinTradingHours, getTradingStatus, formatTime } from '@/lib/utils';
+import { isWithinTradingHours, getTradingStatus, formatTime, isNewTradingDay } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface MonitorListProps {
@@ -37,6 +37,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   const checkAndSendNotification = useCallback((monitor: StockMonitor, stockData: StockData) => {
     if (!isWithinTradingHours()) {
       return;
+    }
+    
+    // 检查是否为新的交易日，如果是则重置所有指标的通知状态
+    if (isNewTradingDay(monitor.lastNotificationDate)) {
+      resetMonitorNotifications(monitor.id);
+      // 重新加载监控数据以获取更新后的状态
+      loadMonitors();
+      return; // 本次不发送通知，等待下次更新
     }
     
     // 检查每个指标
@@ -267,192 +275,208 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       
       {/* 监控列表 - 改为列表形式 */}
       <div className="bg-card border rounded-lg overflow-hidden">
-        <div className="bg-muted/50 px-4 py-2 border-b">
-          <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground">
-            <div className="col-span-3">股票信息</div>
-            <div className="col-span-2">当前价格</div>
-            <div className="col-span-2">涨跌幅</div>
-            <div className="col-span-2">溢价</div>
-            <div className="col-span-2">监控指标</div>
-            <div className="col-span-1">操作</div>
-          </div>
-        </div>
-        
-        <div className="divide-y">
-          {monitors.map((monitor) => {
-            const currentData = stockData[monitor.code];
-            const activeMetrics = monitor.metrics.filter(m => m.isActive);
-            const triggeredMetrics = monitor.metrics.filter(metric => {
-              if (!currentData || !metric.isActive || metric.notificationSent) return false;
-              
-              switch (metric.type) {
-                case 'price':
-                  if (metric.condition === 'above') {
-                    return currentData.currentPrice >= (metric.targetPrice || 0);
-                  } else {
-                    return currentData.currentPrice <= (metric.targetPrice || 0);
-                  }
-                case 'premium':
-                  if (metric.condition === 'above') {
-                    return currentData.premium >= (metric.premiumThreshold || 0);
-                  } else {
-                    return currentData.premium <= (metric.premiumThreshold || 0);
-                  }
-                case 'changePercent':
-                  if (metric.condition === 'above') {
-                    return currentData.changePercent >= (metric.changePercentThreshold || 0);
-                  } else {
-                    return currentData.changePercent <= (metric.changePercentThreshold || 0);
-                  }
-                default:
-                  return false;
-              }
-            });
-            
-            return (
-              <div key={monitor.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${
-                triggeredMetrics.length > 0 ? 'bg-green-50 dark:bg-green-950/20' : ''
-              }`}>
-                <div className="grid grid-cols-12 gap-2 items-center">
-                  {/* 股票信息 */}
-                  <div className="col-span-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-sm">{monitor.name}</div>
-                        <Badge variant="outline" className="text-xs">
-                          {monitor.code}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Switch
-                        checked={monitor.isActive}
-                        onCheckedChange={() => toggleMonitor(monitor)}
-                        className="scale-75"
-                      />
-                      <Badge variant={monitor.isActive ? 'default' : 'secondary'} className="text-xs">
-                        {monitor.isActive ? '监控中' : '已暂停'}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* 当前价格 */}
-                  <div className="col-span-2">
-                    {currentData ? (
-                      <div className="font-semibold text-sm">¥{currentData.currentPrice.toFixed(3)}</div>
-                    ) : (
-                      <div className="text-muted-foreground text-sm">--</div>
-                    )}
-                  </div>
-                  
-                  {/* 涨跌幅 */}
-                  <div className="col-span-2">
-                    {currentData ? (
-                      <div className={`font-semibold text-sm ${
-                        currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground text-sm">--</div>
-                    )}
-                  </div>
-                  
-                  {/* 溢价 */}
-                  <div className="col-span-2">
-                    {currentData ? (
-                      <div className="font-semibold text-sm">{currentData.premium.toFixed(2)}%</div>
-                    ) : (
-                      <div className="text-muted-foreground text-sm">--</div>
-                    )}
-                  </div>
-                  
-                  {/* 监控指标 */}
-                  <div className="col-span-2">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      {activeMetrics.length}/{monitor.metrics.length} 个指标
-                    </div>
-                    <div className="space-y-1">
-                      {monitor.metrics.slice(0, 2).map((metric) => {
-                        const currentValue = getCurrentValue(metric, currentData);
-                        const isTriggered = currentValue && (() => {
-                          switch (metric.type) {
-                            case 'price':
-                              if (metric.condition === 'above') {
-                                return currentValue.value >= (metric.targetPrice || 0);
-                              } else {
-                                return currentValue.value <= (metric.targetPrice || 0);
-                              }
-                            case 'premium':
-                              if (metric.condition === 'above') {
-                                return currentValue.value >= (metric.premiumThreshold || 0);
-                              } else {
-                                return currentValue.value <= (metric.premiumThreshold || 0);
-                              }
-                            case 'changePercent':
-                              if (metric.condition === 'above') {
-                                return currentValue.value >= (metric.changePercentThreshold || 0);
-                              } else {
-                                return currentValue.value <= (metric.changePercentThreshold || 0);
-                              }
-                            default:
-                              return false;
-                          }
-                        })();
-                        
-                        return (
-                          <div key={metric.id} className={`text-xs p-1 rounded ${
-                            metric.notificationSent ? 'bg-green-100 dark:bg-green-900/30' : ''
-                          } ${isTriggered ? 'bg-orange-100 dark:bg-orange-900/30' : ''}`}>
-                            <div className="flex items-center gap-1">
-                              {getMetricIcon(metric.type)}
-                              <span className="truncate">{getMetricDisplayName(metric)}</span>
-                              {isTriggered && <span className="text-orange-600">⚠️</span>}
-                              {metric.notificationSent && <span className="text-green-600">✓</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {monitor.metrics.length > 2 && (
-                        <div className="text-xs text-muted-foreground">
-                          +{monitor.metrics.length - 2} 更多...
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* 操作按钮 */}
-                  <div className="col-span-1">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(monitor)}
-                        className="h-7 w-7 p-0"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(monitor)}
-                        className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* 更新时间 */}
-                {currentData && (
-                  <div className="text-xs text-muted-foreground mt-2">
-                    更新时间: {formatTime(new Date(currentData.timestamp))}
-                  </div>
-                )}
+        {/* 添加水平滚动容器 */}
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]"> {/* 设置最小宽度 */}
+            <div className="bg-muted/50 px-4 py-2 border-b">
+              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground">
+                <div className="col-span-3">股票信息</div>
+                <div className="col-span-2">当前价格</div>
+                <div className="col-span-2">涨跌幅</div>
+                <div className="col-span-2">溢价</div>
+                <div className="col-span-2">监控指标</div>
+                <div className="col-span-1">操作</div>
               </div>
-            );
-          })}
+            </div>
+            
+            <div className="divide-y">
+              {monitors.map((monitor) => {
+                const currentData = stockData[monitor.code];
+                const activeMetrics = monitor.metrics.filter(m => m.isActive);
+                const triggeredMetrics = monitor.metrics.filter(metric => {
+                  if (!currentData || !metric.isActive || metric.notificationSent) return false;
+                  
+                  switch (metric.type) {
+                    case 'price':
+                      if (metric.condition === 'above') {
+                        return currentData.currentPrice >= (metric.targetPrice || 0);
+                      } else {
+                        return currentData.currentPrice <= (metric.targetPrice || 0);
+                      }
+                    case 'premium':
+                      if (metric.condition === 'above') {
+                        return currentData.premium >= (metric.premiumThreshold || 0);
+                      } else {
+                        return currentData.premium <= (metric.premiumThreshold || 0);
+                      }
+                    case 'changePercent':
+                      if (metric.condition === 'above') {
+                        return currentData.changePercent >= (metric.changePercentThreshold || 0);
+                      } else {
+                        return currentData.changePercent <= (metric.changePercentThreshold || 0);
+                      }
+                    default:
+                      return false;
+                  }
+                });
+                
+                return (
+                  <div key={monitor.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${
+                    triggeredMetrics.length > 0 ? 'bg-green-50 dark:bg-green-950/20' : ''
+                  }`}>
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      {/* 股票信息 */}
+                      <div className="col-span-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-sm">{monitor.name}</div>
+                            <Badge variant="outline" className="text-xs">
+                              {monitor.code}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Switch
+                            checked={monitor.isActive}
+                            onCheckedChange={() => toggleMonitor(monitor)}
+                            className="scale-75"
+                          />
+                          <Badge variant={monitor.isActive ? 'default' : 'secondary'} className="text-xs">
+                            {monitor.isActive ? '监控中' : '已暂停'}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {/* 当前价格 */}
+                      <div className="col-span-2">
+                        {currentData ? (
+                          <div className="font-semibold text-sm">¥{currentData.currentPrice.toFixed(3)}</div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">--</div>
+                        )}
+                      </div>
+                      
+                      {/* 涨跌幅 */}
+                      <div className="col-span-2">
+                        {currentData ? (
+                          <div className={`font-semibold text-sm ${
+                            currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
+                          }`}>
+                            {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">--</div>
+                        )}
+                      </div>
+                      
+                      {/* 溢价 */}
+                      <div className="col-span-2">
+                        {currentData ? (
+                          <div className="font-semibold text-sm">{currentData.premium.toFixed(2)}%</div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">--</div>
+                        )}
+                      </div>
+                      
+                      {/* 监控指标 */}
+                      <div className="col-span-2">
+                        <div className="text-xs text-muted-foreground mb-1">
+                          {activeMetrics.length}/{monitor.metrics.length} 个指标
+                        </div>
+                        <div className="space-y-1">
+                          {monitor.metrics.slice(0, 2).map((metric) => {
+                            const currentValue = getCurrentValue(metric, currentData);
+                            const isTriggered = currentValue && (() => {
+                              switch (metric.type) {
+                                case 'price':
+                                  if (metric.condition === 'above') {
+                                    return currentValue.value >= (metric.targetPrice || 0);
+                                  } else {
+                                    return currentValue.value <= (metric.targetPrice || 0);
+                                  }
+                                case 'premium':
+                                  if (metric.condition === 'above') {
+                                    return currentValue.value >= (metric.premiumThreshold || 0);
+                                  } else {
+                                    return currentValue.value <= (metric.premiumThreshold || 0);
+                                  }
+                                case 'changePercent':
+                                  if (metric.condition === 'above') {
+                                    return currentValue.value >= (metric.changePercentThreshold || 0);
+                                  } else {
+                                    return currentValue.value <= (metric.changePercentThreshold || 0);
+                                  }
+                                default:
+                                  return false;
+                              }
+                            })();
+                            
+                            return (
+                              <div key={metric.id} className={`text-xs p-1 rounded ${
+                                metric.notificationSent ? 'bg-green-100 dark:bg-green-900/30' : ''
+                              } ${isTriggered ? 'bg-orange-100 dark:bg-orange-900/30' : ''}`}>
+                                <div className="flex items-center gap-1">
+                                  {getMetricIcon(metric.type)}
+                                  <span className="truncate">{getMetricDisplayName(metric)}</span>
+                                  {isTriggered && <span className="text-orange-600">⚠️</span>}
+                                  {metric.notificationSent && <span className="text-green-600">✓</span>}
+                                  {metric.notificationSent && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => resetMetricNotification(monitor, metric.id)}
+                                      className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                      title="重置通知状态"
+                                    >
+                                      <RefreshCw className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {monitor.metrics.length > 2 && (
+                            <div className="text-xs text-muted-foreground">
+                              +{monitor.metrics.length - 2} 更多...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div className="col-span-1">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(monitor)}
+                            className="h-7 w-7 p-0"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(monitor)}
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 更新时间 */}
+                    {currentData && (
+                      <div className="text-xs text-muted-foreground mt-2">
+                        更新时间: {formatTime(new Date(currentData.timestamp))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
       

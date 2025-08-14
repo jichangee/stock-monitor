@@ -14,6 +14,7 @@ import { formatStockCode, fetchStockNameFromEastmoney } from '@/lib/stockApi';
 import { toast } from 'sonner';
 import { StockMonitor, MonitorMetric } from '@/types/stock';
 import { Search, Loader2, Plus, Trash2 } from 'lucide-react';
+import { generateUUID } from '@/lib/utils';
 
 // 单个指标的验证模式
 const metricSchema = z.object({
@@ -99,7 +100,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
 
   const addMetric = () => {
     const newMetric: MonitorMetric = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       type: 'price',
       targetPrice: 0,
       condition: 'above',
