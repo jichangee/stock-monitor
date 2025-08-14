@@ -38,6 +38,66 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    let isPageActive = true;
+
+    // 检测页面可见性变化
+    const handleVisibilityChange = () => {
+      isPageActive = !document.hidden;
+      updateUpdateInterval(isPageActive);
+    };
+
+    // 检测用户活动
+    const handleUserActivity = () => {
+      if (!isPageActive) {
+        isPageActive = true;
+        updateUpdateInterval(true);
+      }
+      
+      // 重置活动检测定时器
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        isPageActive = false;
+        updateUpdateInterval(false);
+      }, 30000); // 30秒无活动后认为用户离开
+    };
+
+    // 更新更新频率
+    const updateUpdateInterval = (active: boolean) => {
+      const newInterval = active ? 5 : 10;
+      if (newInterval !== settings.updateInterval) {
+        const updatedSettings = { ...settings, updateInterval: newInterval };
+        setSettings(updatedSettings);
+        
+        try {
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
+        } catch (error) {
+          console.error('保存设置失败:', error);
+        }
+      }
+    };
+
+    // 添加事件监听器
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mousemove', handleUserActivity);
+    document.addEventListener('keydown', handleUserActivity);
+    document.addEventListener('click', handleUserActivity);
+    document.addEventListener('scroll', handleUserActivity);
+
+    // 初始化活动检测
+    handleUserActivity();
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mousemove', handleUserActivity);
+      document.removeEventListener('keydown', handleUserActivity);
+      document.removeEventListener('click', handleUserActivity);
+      document.removeEventListener('scroll', handleUserActivity);
+    };
+  }, []);
+
   const updateSettings = (newSettings: Partial<SettingsData>) => {
     const updatedSettings = { ...settings, ...newSettings, lastUpdated: Date.now() };
     setSettings(updatedSettings);
