@@ -4,14 +4,17 @@ import { useState, useEffect } from 'react';
 import { MonitorDialog } from '@/components/MonitorDialog';
 import { MonitorList } from '@/components/MonitorList';
 import { IndexMonitor } from '@/components/IndexMonitor';
+import { SettingsPanel } from '@/components/SettingsPanel';
 import { requestNotificationPermission } from '@/lib/notifications';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { StockMonitor } from '@/types/stock';
 import { Plus, Clock } from 'lucide-react';
 import { isWithinTradingHours, getTradingStatus } from '@/lib/utils';
+import { useSettings } from '@/contexts/SettingsContext';
 
 export default function Home() {
+  const { settings } = useSettings();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [editingMonitor, setEditingMonitor] = useState<StockMonitor | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,7 +88,7 @@ export default function Home() {
                 isWithinTradingHours() ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'
               }`}>
                 {isWithinTradingHours() 
-                  ? '系统正在实时监控中，数据每10秒自动更新'
+                  ? `系统正在实时监控中，数据每${settings.updateInterval}秒自动更新`
                   : '非交易时间，监控已暂停，数据更新将在下一个交易日自动恢复'
                 }
               </div>
@@ -99,8 +102,10 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
           {/* 监控列表 */}
           <div className="w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold">监控列表</h2>
+                      <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold">监控列表</h2>
+            <div className="flex items-center gap-2">
+              <SettingsPanel />
               <Button 
                 onClick={handleAddMonitor} 
                 className="flex items-center gap-2"
@@ -109,6 +114,7 @@ export default function Home() {
                 添加监控
               </Button>
             </div>
+          </div>
             <MonitorList 
               refreshTrigger={refreshTrigger}
               onEditMonitor={handleEditMonitor}

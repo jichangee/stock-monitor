@@ -12,6 +12,7 @@ import { StockMonitor, StockData, MonitorMetric } from '@/types/stock';
 import { toast } from 'sonner';
 import { Trash2, BellOff, Edit, TrendingUp, DollarSign, RefreshCw, Clock, AlertCircle } from 'lucide-react';
 import { isWithinTradingHours, getTradingStatus, formatTime } from '@/lib/utils';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface MonitorListProps {
   refreshTrigger: number;
@@ -19,6 +20,7 @@ interface MonitorListProps {
 }
 
 export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps) {
+  const { settings } = useSettings();
   const [monitors, setMonitors] = useState<StockMonitor[]>([]);
   const [stockData, setStockData] = useState<Record<string, StockData>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -108,10 +110,10 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
 
   useEffect(() => {
     if (monitors.length > 0 && isWithinTradingHours()) {
-      const interval = setInterval(updateStockData, 10000); // 每10秒更新一次
+      const interval = setInterval(updateStockData, settings.updateInterval * 1000); // 使用设置中的更新间隔
       return () => clearInterval(interval);
     }
-  }, [monitors, updateStockData]);
+  }, [monitors, updateStockData, settings.updateInterval]);
 
   const toggleMonitor = async (monitor: StockMonitor) => {
     const updated = updateStockMonitor(monitor.id, { 
@@ -334,46 +336,116 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                     监控指标 ({activeMetrics.length}/{monitor.metrics.length})
                   </div>
                   
-                  {monitor.metrics.map((metric) => (
-                    <div key={metric.id} className={`flex items-center justify-between p-3 border rounded-lg ${
-                      metric.notificationSent ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : ''
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {getMetricIcon(metric.type)}
-                        <div>
-                          <div className="font-medium">{getMetricDisplayName(metric)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {metric.condition === 'above' ? '高于目标时通知' : '低于目标时通知'}
+                  {monitor.metrics.map((metric) => {
+                    // 获取当前指标数值
+                    const getCurrentValue = () => {
+                      if (!currentData) return null;
+                      
+                      switch (metric.type) {
+                        case 'price':
+                          return {
+                            value: currentData.currentPrice,
+                            unit: '¥',
+                            format: (val: number) => val.toFixed(3)
+                          };
+                        case 'premium':
+                          return {
+                            value: currentData.premium,
+                            unit: '%',
+                            format: (val: number) => val.toFixed(2)
+                          };
+                        case 'changePercent':
+                          return {
+                            value: currentData.changePercent,
+                            unit: '%',
+                            format: (val: number) => val.toFixed(2)
+                          };
+                        default:
+                          return null;
+                      }
+                    };
+
+                    const currentValue = getCurrentValue();
+                    const isTriggered = currentValue && (() => {
+                      switch (metric.type) {
+                        case 'price':
+                          if (metric.condition === 'above') {
+                            return currentValue.value >= (metric.targetPrice || 0);
+                          } else {
+                            return currentValue.value <= (metric.targetPrice || 0);
+                          }
+                        case 'premium':
+                          if (metric.condition === 'above') {
+                            return currentValue.value >= (metric.premiumThreshold || 0);
+                          } else {
+                            return currentValue.value <= (metric.premiumThreshold || 0);
+                          }
+                        case 'changePercent':
+                          if (metric.condition === 'above') {
+                            return currentValue.value >= (metric.changePercentThreshold || 0);
+                          } else {
+                            return currentValue.value <= (metric.changePercentThreshold || 0);
+                          }
+                        default:
+                          return false;
+                      }
+                    })();
+
+                    return (
+                      <div key={metric.id} className={`flex items-center justify-between p-3 border rounded-lg ${
+                        metric.notificationSent ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : ''
+                      } ${isTriggered ? 'ring-2 ring-orange-400 bg-orange-50 dark:bg-orange-950/20' : ''}`}>
+                        <div className="flex items-center gap-3">
+                          {getMetricIcon(metric.type)}
+                          <div>
+                            <div className="font-medium">{getMetricDisplayName(metric)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {metric.condition === 'above' ? '高于目标时通知' : '低于目标时通知'}
+                            </div>
+                            {/* 当前数值显示 */}
+                            {currentValue && (
+                              <div className="text-xs mt-1">
+                                <span className="text-muted-foreground">当前: </span>
+                                <span className={`font-medium ${
+                                  isTriggered ? 'text-orange-600' : 'text-foreground'
+                                }`}>
+                                  {currentValue.unit}{currentValue.format(currentValue.value)}
+                                </span>
+                                {isTriggered && (
+                                  <span className="text-orange-600 ml-1">⚠️ 已触发</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={metric.isActive}
-                          onCheckedChange={() => toggleMetric(monitor, metric.id)}
-                        />
                         
-                        {metric.notificationSent && (
-                          <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
-                            已通知
-                          </Badge>
-                        )}
-                        
-                        {metric.notificationSent && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => resetMetricNotification(monitor, metric.id)}
-                            className="h-6 w-6 p-0"
-                            title="重置通知"
-                          >
-                            <BellOff className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={metric.isActive}
+                            onCheckedChange={() => toggleMetric(monitor, metric.id)}
+                          />
+                          
+                          {metric.notificationSent && (
+                            <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
+                              已通知
+                            </Badge>
+                          )}
+                          
+                          {metric.notificationSent && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => resetMetricNotification(monitor, metric.id)}
+                              className="h-6 w-6 p-0"
+                              title="重置通知"
+                            >
+                              <BellOff className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -385,7 +457,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       {monitors.length > 0 && (
         <div className="text-xs text-muted-foreground text-center">
           {isWithinTradingHours() 
-            ? '数据每10秒自动更新，触发条件的监控项会高亮显示'
+            ? `数据每${settings.updateInterval}秒自动更新，触发条件的监控项会高亮显示`
             : '非交易时间，数据更新已暂停'
           }
         </div>
