@@ -70,11 +70,12 @@ export function addStockMonitor(monitor: Omit<StockMonitor, 'id' | 'createdAt' |
     throw new Error('股票代码和名称不能为空');
   }
   
+  // 允许监控指标为空，如果没有指标则创建默认指标
   if (!monitor.metrics || monitor.metrics.length === 0) {
-    throw new Error('至少需要添加一个监控指标');
+    monitor.metrics = [];
   }
   
-  // 验证每个指标
+  // 验证每个指标（如果有的话）
   for (const metric of monitor.metrics) {
     if (metric.type === 'price') {
       if (!metric.targetPrice || metric.targetPrice <= 0) {
@@ -137,11 +138,8 @@ export function updateStockMonitor(id: string, updates: Partial<StockMonitor>): 
     }
     
     if (updates.metrics) {
-      if (updates.metrics.length === 0) {
-        throw new Error('至少需要保留一个监控指标');
-      }
-      
-      // 验证每个指标
+      // 允许监控指标为空
+      // 验证每个指标（如果有的话）
       for (const metric of updates.metrics) {
         if (metric.type === 'price') {
           if (!metric.targetPrice || metric.targetPrice <= 0) {

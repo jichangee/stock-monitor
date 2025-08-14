@@ -277,14 +277,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       <div className="bg-card border rounded-lg overflow-hidden">
         {/* 添加水平滚动容器 */}
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]"> {/* 设置最小宽度 */}
+          <div className="min-w-[800px]"> {/* 减小最小宽度 */}
             <div className="bg-muted/50 px-4 py-2 border-b">
-              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-12 gap-1 text-xs font-medium text-muted-foreground">
                 <div className="col-span-3">股票信息</div>
-                <div className="col-span-2">当前价格</div>
-                <div className="col-span-2">涨跌幅</div>
-                <div className="col-span-2">溢价</div>
-                <div className="col-span-2">监控指标</div>
+                <div className="col-span-1">价格</div>
+                <div className="col-span-1">涨跌</div>
+                <div className="col-span-1">溢价</div>
+                <div className="col-span-3">指标</div>
                 <div className="col-span-1">操作</div>
               </div>
             </div>
@@ -324,18 +324,18 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                   <div key={monitor.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${
                     triggeredMetrics.length > 0 ? 'bg-green-50 dark:bg-green-950/20' : ''
                   }`}>
-                    <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="grid grid-cols-12 gap-1 items-center">
                       {/* 股票信息 */}
                       <div className="col-span-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium text-sm">{monitor.name}</div>
+                        <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1">
+                            <div className="font-medium text-sm truncate">{monitor.name}</div>
                             <Badge variant="outline" className="text-xs">
                               {monitor.code}
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1 mt-1">
                           <Switch
                             checked={monitor.isActive}
                             onCheckedChange={() => toggleMonitor(monitor)}
@@ -348,7 +348,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       
                       {/* 当前价格 */}
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {currentData ? (
                           <div className="font-semibold text-sm">¥{currentData.currentPrice.toFixed(3)}</div>
                         ) : (
@@ -357,20 +357,20 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       
                       {/* 涨跌幅 */}
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {currentData ? (
                           <div className={`font-semibold text-sm ${
                             currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
                           }`}>
-                            {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
-                          </div>
+                          {currentData.changePercent >= 0 ? '+' : ''}{currentData.changePercent.toFixed(2)}%
+                        </div>
                         ) : (
                           <div className="text-muted-foreground text-sm">--</div>
                         )}
                       </div>
                       
                       {/* 溢价 */}
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {currentData ? (
                           <div className="font-semibold text-sm">{currentData.premium.toFixed(2)}%</div>
                         ) : (
@@ -379,66 +379,74 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       
                       {/* 监控指标 */}
-                      <div className="col-span-2">
+                      <div className="col-span-3">
                         <div className="text-xs text-muted-foreground mb-1">
-                          {activeMetrics.length}/{monitor.metrics.length} 个指标
+                          {activeMetrics.length}/{monitor.metrics.length}
                         </div>
                         <div className="space-y-1">
-                          {monitor.metrics.slice(0, 2).map((metric) => {
-                            const currentValue = getCurrentValue(metric, currentData);
-                            const isTriggered = currentValue && (() => {
-                              switch (metric.type) {
-                                case 'price':
-                                  if (metric.condition === 'above') {
-                                    return currentValue.value >= (metric.targetPrice || 0);
-                                  } else {
-                                    return currentValue.value <= (metric.targetPrice || 0);
-                                  }
-                                case 'premium':
-                                  if (metric.condition === 'above') {
-                                    return currentValue.value >= (metric.premiumThreshold || 0);
-                                  } else {
-                                    return currentValue.value <= (metric.premiumThreshold || 0);
-                                  }
-                                case 'changePercent':
-                                  if (metric.condition === 'above') {
-                                    return currentValue.value >= (metric.changePercentThreshold || 0);
-                                  } else {
-                                    return currentValue.value <= (metric.changePercentThreshold || 0);
-                                  }
-                                default:
-                                  return false;
-                              }
-                            })();
-                            
-                            return (
-                              <div key={metric.id} className={`text-xs p-1 rounded ${
-                                metric.notificationSent ? 'bg-green-100 dark:bg-green-900/30' : ''
-                              } ${isTriggered ? 'bg-orange-100 dark:bg-orange-900/30' : ''}`}>
-                                <div className="flex items-center gap-1">
-                                  {getMetricIcon(metric.type)}
-                                  <span className="truncate">{getMetricDisplayName(metric)}</span>
-                                  {isTriggered && <span className="text-orange-600">⚠️</span>}
-                                  {metric.notificationSent && <span className="text-green-600">✓</span>}
-                                  {metric.notificationSent && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => resetMetricNotification(monitor, metric.id)}
-                                      className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
-                                      title="重置通知状态"
-                                    >
-                                      <RefreshCw className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {monitor.metrics.length > 2 && (
-                            <div className="text-xs text-muted-foreground">
-                              +{monitor.metrics.length - 2} 更多...
+                          {monitor.metrics.length === 0 ? (
+                            <div className="text-xs text-muted-foreground p-1 rounded bg-muted/30">
+                              无指标
                             </div>
+                          ) : (
+                            <>
+                              {monitor.metrics.slice(0, 1).map((metric) => {
+                                const currentValue = getCurrentValue(metric, currentData);
+                                const isTriggered = currentValue && (() => {
+                                  switch (metric.type) {
+                                    case 'price':
+                                      if (metric.condition === 'above') {
+                                        return currentValue.value >= (metric.targetPrice || 0);
+                                      } else {
+                                        return currentValue.value <= (metric.targetPrice || 0);
+                                      }
+                                    case 'premium':
+                                      if (metric.condition === 'above') {
+                                        return currentValue.value >= (metric.premiumThreshold || 0);
+                                      } else {
+                                        return currentValue.value <= (metric.premiumThreshold || 0);
+                                      }
+                                    case 'changePercent':
+                                      if (metric.condition === 'above') {
+                                        return currentValue.value >= (metric.changePercentThreshold || 0);
+                                      } else {
+                                        return currentValue.value <= (metric.changePercentThreshold || 0);
+                                      }
+                                    default:
+                                      return false;
+                                  }
+                                })();
+                                
+                                return (
+                                  <div key={metric.id} className={`text-xs p-1 rounded ${
+                                    metric.notificationSent ? 'bg-green-100 dark:bg-green-900/30' : ''
+                                  } ${isTriggered ? 'bg-orange-100 dark:bg-orange-900/30' : ''}`}>
+                                    <div className="flex items-center gap-1">
+                                      {getMetricIcon(metric.type)}
+                                      <span className="truncate">{getMetricDisplayName(metric)}</span>
+                                      {isTriggered && <span className="text-orange-600">⚠️</span>}
+                                      {metric.notificationSent && <span className="text-green-600">✓</span>}
+                                      {metric.notificationSent && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => resetMetricNotification(monitor, metric.id)}
+                                          className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                          title="重置通知状态"
+                                        >
+                                          <RefreshCw className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {monitor.metrics.length > 1 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{monitor.metrics.length - 1}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

@@ -156,11 +156,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
     setIsLoading(true);
     
     try {
-      if (metrics.length === 0) {
-        toast.error('请至少添加一个监控指标');
-        return;
-      }
-
+      // 允许监控指标为空，不再强制要求至少一个指标
       const formattedCode = formatStockCode(data.code);
       
       if (isEditMode && editMonitor) {
@@ -267,7 +263,10 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label>监控指标</Label>
+              <div>
+                <Label>监控指标</Label>
+                <p className="text-xs text-muted-foreground mt-1">可选，用于设置价格、溢价或涨跌幅提醒</p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -282,7 +281,9 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
 
             {metrics.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                请点击&ldquo;添加指标&rdquo;按钮来添加监控指标
+                <p>暂无监控指标</p>
+                <p className="text-sm mt-1">可以点击&quot;添加指标&quot;按钮来设置价格、溢价或涨跌幅提醒</p>
+                <p className="text-sm mt-1">也可以直接保存，稍后再添加指标</p>
               </div>
             )}
 
