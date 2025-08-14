@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { MonitorDialog } from '@/components/MonitorDialog';
 import { MonitorList } from '@/components/MonitorList';
+import { IndexMonitor } from '@/components/IndexMonitor';
 import { requestNotificationPermission } from '@/lib/notifications';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -91,6 +92,9 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* 主要指数监控 */}
+        <IndexMonitor />
 
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
           {/* 监控列表 */}
