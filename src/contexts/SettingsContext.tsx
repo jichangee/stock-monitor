@@ -18,6 +18,7 @@ interface SettingsContextType {
   settings: SettingsData;
   updateSettings: (newSettings: Partial<SettingsData>) => void;
   resetSettings: () => void;
+  importSettings: (newSettings: SettingsData) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -118,8 +119,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const importSettings = (newSettings: SettingsData) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+    } catch (error) {
+      console.error('导入设置失败:', error);
+    }
+  };
+
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, resetSettings, importSettings }}>
       {children}
     </SettingsContext.Provider>
   );
