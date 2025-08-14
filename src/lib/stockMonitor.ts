@@ -85,7 +85,7 @@ export function addStockMonitor(monitor: Omit<StockMonitor, 'id' | 'createdAt' |
         throw new Error('溢价监控需要有效的溢价阈值');
       }
     } else if (metric.type === 'changePercent') {
-      if (!metric.changePercentThreshold || metric.changePercentThreshold <= 0) {
+      if (metric.changePercentThreshold === undefined || metric.changePercentThreshold === 0) {
         throw new Error('涨跌幅监控需要有效的涨跌幅阈值');
       }
     } else {
@@ -152,7 +152,7 @@ export function updateStockMonitor(id: string, updates: Partial<StockMonitor>): 
             throw new Error('溢价监控需要有效的溢价阈值');
           }
         } else if (metric.type === 'changePercent') {
-          if (!metric.changePercentThreshold || metric.changePercentThreshold <= 0) {
+          if (metric.changePercentThreshold === undefined || metric.changePercentThreshold === 0) {
             throw new Error('涨跌幅监控需要有效的涨跌幅阈值');
           }
         }

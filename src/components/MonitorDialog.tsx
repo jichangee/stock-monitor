@@ -29,7 +29,8 @@ const metricSchema = z.object({
   } else if (data.type === 'premium') {
     return data.premiumThreshold && data.premiumThreshold > 0;
   } else if (data.type === 'changePercent') {
-    return data.changePercentThreshold && data.changePercentThreshold > 0;
+    // 涨跌幅阈值可以是正数或负数，但不能为0
+    return data.changePercentThreshold !== undefined && data.changePercentThreshold !== 0;
   }
   return false;
 }, {
