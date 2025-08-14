@@ -12,29 +12,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { addStockMonitor, updateStockMonitor } from '@/lib/stockMonitor';
 import { formatStockCode, fetchStockName } from '@/lib/stockApi';
 import { toast } from 'sonner';
-import { StockMonitor } from '@/types/stock';
-import { Search, Loader2 } from 'lucide-react';
+import { StockMonitor, MonitorMetric } from '@/types/stock';
+import { Search, Loader2, Plus, Trash2 } from 'lucide-react';
 
-const addMonitorSchema = z.object({
-  code: z.string().min(1, '请输入股票代码').trim(),
-  name: z.string().min(1, '请输入股票名称').trim(),
+// 单个指标的验证模式
+const metricSchema = z.object({
+  type: z.enum(['price', 'premium', 'changePercent']),
   targetPrice: z.number().optional(),
   condition: z.enum(['above', 'below']),
-  monitorType: z.enum(['price', 'premium', 'changePercent']),
   premiumThreshold: z.number().optional(),
-  changePercentThreshold: z.number().optional()
+  changePercentThreshold: z.number().optional(),
+  isActive: z.boolean()
 }).refine((data) => {
-  if (data.monitorType === 'price') {
+  if (data.type === 'price') {
     return data.targetPrice && data.targetPrice > 0;
-  } else if (data.monitorType === 'premium') {
+  } else if (data.type === 'premium') {
     return data.premiumThreshold && data.premiumThreshold > 0;
-  } else if (data.monitorType === 'changePercent') {
+  } else if (data.type === 'changePercent') {
     return data.changePercentThreshold && data.changePercentThreshold > 0;
   }
   return false;
 }, {
-  message: '请根据监控类型设置相应的有效值',
-  path: ['monitorType']
+  message: '请根据监控类型设置相应的有效值'
+});
+
+// 表单验证模式
+const addMonitorSchema = z.object({
+  code: z.string().min(1, '请输入股票代码').trim(),
+  name: z.string().min(1, '请输入股票名称').trim(),
+  metrics: z.array(metricSchema).min(1, '至少需要添加一个监控指标')
 });
 
 type AddMonitorFormData = z.infer<typeof addMonitorSchema>;
@@ -50,6 +56,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isEditMode, setIsEditMode] = useState(!!editMonitor);
+  const [metrics, setMetrics] = useState<MonitorMetric[]>([]);
   
   const {
     register,
@@ -57,54 +64,77 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
     formState: { errors },
     reset,
     setValue,
-    watch,
-    clearErrors
+    watch
   } = useForm<AddMonitorFormData>({
     resolver: zodResolver(addMonitorSchema),
     defaultValues: {
-      condition: 'above',
-      monitorType: 'price'
+      code: '',
+      name: '',
+      metrics: []
     }
   });
 
-  const watchMonitorType = watch('monitorType');
+  const watchCode = watch('code');
 
   useEffect(() => {
     if (editMonitor && open) {
       setIsEditMode(true);
+      setMetrics(editMonitor.metrics);
       reset({
         code: editMonitor.code,
         name: editMonitor.name,
-        targetPrice: editMonitor.targetPrice || 0,
-        condition: editMonitor.condition,
-        monitorType: editMonitor.monitorType,
-        premiumThreshold: editMonitor.premiumThreshold,
-        changePercentThreshold: editMonitor.changePercentThreshold
+        metrics: editMonitor.metrics
       });
     } else if (!editMonitor && open) {
       setIsEditMode(false);
+      setMetrics([]);
       reset({
         code: '',
         name: '',
-        targetPrice: undefined,
-        condition: 'above',
-        monitorType: 'price',
-        premiumThreshold: undefined,
-        changePercentThreshold: undefined
+        metrics: []
       });
     }
   }, [editMonitor, open, reset]);
 
+  const addMetric = () => {
+    const newMetric: MonitorMetric = {
+      id: crypto.randomUUID(),
+      type: 'price',
+      targetPrice: 0,
+      condition: 'above',
+      premiumThreshold: 0,
+      changePercentThreshold: 0,
+      isActive: true,
+      notificationSent: false
+    };
+    
+    const updatedMetrics = [...metrics, newMetric];
+    setMetrics(updatedMetrics);
+    setValue('metrics', updatedMetrics);
+  };
+
+  const removeMetric = (index: number) => {
+    const updatedMetrics = metrics.filter((_, i) => i !== index);
+    setMetrics(updatedMetrics);
+    setValue('metrics', updatedMetrics);
+  };
+
+  const updateMetric = (index: number, field: keyof MonitorMetric, value: string | number | boolean) => {
+    const updatedMetrics = [...metrics];
+    updatedMetrics[index] = { ...updatedMetrics[index], [field]: value };
+    setMetrics(updatedMetrics);
+    setValue('metrics', updatedMetrics);
+  };
+
   const searchStockName = async () => {
-    const code = watch('code');
-    if (!code) {
+    if (!watchCode) {
       toast.error('请先输入股票代码');
       return;
     }
 
     setIsSearching(true);
     try {
-      const formattedCode = formatStockCode(code);
+      const formattedCode = formatStockCode(watchCode);
       const name = await fetchStockName(formattedCode);
       
       if (name) {
@@ -124,114 +154,47 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
     setIsLoading(true);
     
     try {
-      // 验证必填字段
-      if (!data.code.trim()) {
-        toast.error('请输入股票代码');
+      if (metrics.length === 0) {
+        toast.error('请至少添加一个监控指标');
         return;
       }
-      
-      if (!data.name.trim()) {
-        toast.error('请输入股票名称');
-        return;
-      }
-      
-      // 根据监控类型验证相应字段
-      if (data.monitorType === 'price') {
-        if (!data.targetPrice || data.targetPrice <= 0) {
-          toast.error('请输入有效的目标价格');
-          return;
-        }
-      } else if (data.monitorType === 'premium') {
-        if (!data.premiumThreshold || data.premiumThreshold <= 0) {
-          toast.error('请输入有效的溢价阈值');
-          return;
-        }
-      } else if (data.monitorType === 'changePercent') {
-        if (!data.changePercentThreshold || data.changePercentThreshold <= 0) {
-          toast.error('请输入有效的涨跌幅阈值');
-          return;
-        }
-      }
-      
+
       const formattedCode = formatStockCode(data.code);
       
       if (isEditMode && editMonitor) {
         // 编辑模式
-        try {
-                  const updateData: Partial<StockMonitor> = {
+        const updateData: Partial<StockMonitor> = {
           code: formattedCode,
           name: data.name,
-          condition: data.condition,
-          monitorType: data.monitorType
+          metrics: metrics
         };
-          
-          // 根据监控类型添加相应字段
-          if (data.monitorType === 'price') {
-            updateData.targetPrice = data.targetPrice;
-          } else if (data.monitorType === 'premium') {
-            updateData.premiumThreshold = data.premiumThreshold;
-          } else if (data.monitorType === 'changePercent') {
-            updateData.changePercentThreshold = data.changePercentThreshold;
-          }
-          
-          const updated = updateStockMonitor(editMonitor.id, updateData);
-          
-          if (updated) {
-            toast.success('监控更新成功！');
-            onOpenChange(false);
-            onMonitorAdded();
-          } else {
-            toast.error('更新监控失败，请重试');
-          }
-        } catch (updateError) {
-          console.error('更新监控时发生错误:', updateError);
-          const errorMessage = updateError instanceof Error ? updateError.message : '更新监控失败，请重试';
-          toast.error(errorMessage);
+        
+        const updated = updateStockMonitor(editMonitor.id, updateData);
+        
+        if (updated) {
+          toast.success('监控更新成功！');
+          onOpenChange(false);
+          onMonitorAdded();
+        } else {
+          toast.error('更新监控失败，请重试');
         }
       } else {
         // 添加模式
-        try {
-                  const monitorData: {
-          code: string;
-          name: string;
-          condition: 'above' | 'below';
-          monitorType: 'price' | 'premium' | 'changePercent';
-          isActive: boolean;
-          notificationSent: boolean;
-          targetPrice?: number;
-          premiumThreshold?: number;
-          changePercentThreshold?: number;
-        } = {
+        const monitorData = {
           code: formattedCode,
           name: data.name,
-          condition: data.condition,
-          monitorType: data.monitorType,
-          isActive: true,
-          notificationSent: false
+          metrics: metrics,
+          isActive: true
         };
-          
-          // 根据监控类型添加相应字段
-          if (data.monitorType === 'price') {
-            monitorData.targetPrice = data.targetPrice;
-          } else if (data.monitorType === 'premium') {
-            monitorData.premiumThreshold = data.premiumThreshold;
-          } else if (data.monitorType === 'changePercent') {
-            monitorData.changePercentThreshold = data.changePercentThreshold;
-          }
-          
-          const newMonitor = addStockMonitor(monitorData);
-          
-          if (newMonitor && newMonitor.id) {
-            toast.success('监控添加成功！');
-            onOpenChange(false);
-            onMonitorAdded();
-          } else {
-            toast.error('添加监控失败，请重试');
-          }
-        } catch (addError) {
-          console.error('添加监控时发生错误:', addError);
-          const errorMessage = addError instanceof Error ? addError.message : '添加监控失败，请检查输入数据后重试';
-          toast.error(errorMessage);
+        
+        const newMonitor = addStockMonitor(monitorData);
+        
+        if (newMonitor && newMonitor.id) {
+          toast.success('监控添加成功！');
+          onOpenChange(false);
+          onMonitorAdded();
+        } else {
+          toast.error('添加监控失败，请重试');
         }
       }
     } catch (error) {
@@ -246,11 +209,12 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
   const handleClose = () => {
     onOpenChange(false);
     reset();
+    setMetrics([]);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>{isEditMode ? '编辑股票监控' : '添加股票监控'}</span>
@@ -258,159 +222,180 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="code">股票代码</Label>
-            <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="code">股票代码</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="code"
+                  placeholder="例如: 159509 或 sz159509"
+                  {...register('code')}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={searchStockName}
+                  disabled={isSearching}
+                >
+                  {isSearching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              {errors.code && (
+                <p className="text-sm text-red-500">{errors.code.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="name">股票名称</Label>
               <Input
-                id="code"
-                placeholder="例如: 159509 或 sz159509"
-                {...register('code')}
+                id="name"
+                placeholder="例如: 创业板50ETF"
+                {...register('name')}
               />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>监控指标</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={searchStockName}
-                disabled={isSearching}
+                onClick={addMetric}
+                className="flex items-center gap-2"
               >
-                {isSearching ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
+                <Plus className="h-4 w-4" />
+                添加指标
               </Button>
             </div>
-            {errors.code && (
-              <p className="text-sm text-red-500">{errors.code.message}</p>
+
+            {metrics.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                请点击&ldquo;添加指标&rdquo;按钮来添加监控指标
+              </div>
             )}
+
+            {metrics.map((metric, index) => (
+              <div key={metric.id} className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">指标 {index + 1}</h4>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeMetric(index)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>监控类型</Label>
+                    <Select
+                      value={metric.type}
+                      onValueChange={(value) => updateMetric(index, 'type', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="price">价格监控</SelectItem>
+                        <SelectItem value="premium">溢价监控</SelectItem>
+                        <SelectItem value="changePercent">涨跌幅监控</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>监控条件</Label>
+                    <Select
+                      value={metric.condition}
+                      onValueChange={(value) => updateMetric(index, 'condition', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="above">
+                          {metric.type === 'price' ? '价格高于目标价格时通知' : 
+                           metric.type === 'premium' ? '溢价高于阈值时通知' : '涨跌幅高于阈值时通知'}
+                        </SelectItem>
+                        <SelectItem value="below">
+                          {metric.type === 'price' ? '价格低于目标价格时通知' : 
+                           metric.type === 'premium' ? '溢价低于阈值时通知' : '涨跌幅低于阈值时通知'}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {metric.type === 'price' && (
+                  <div className="space-y-2">
+                    <Label>目标价格</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      value={metric.targetPrice || ''}
+                      onChange={(e) => updateMetric(index, 'targetPrice', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                )}
+
+                {metric.type === 'premium' && (
+                  <div className="space-y-2">
+                    <Label>溢价阈值 (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      placeholder="5.0000"
+                      value={metric.premiumThreshold || ''}
+                      onChange={(e) => updateMetric(index, 'premiumThreshold', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                )}
+
+                {metric.type === 'changePercent' && (
+                  <div className="space-y-2">
+                    <Label>涨跌幅阈值 (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      placeholder="5.0000"
+                      value={metric.changePercentThreshold || ''}
+                      onChange={(e) => updateMetric(index, 'changePercentThreshold', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id={`active-${metric.id}`}
+                    checked={metric.isActive}
+                    onChange={(e) => updateMetric(index, 'isActive', e.target.checked)}
+                    className="rounded"
+                  />
+                  <Label htmlFor={`active-${metric.id}`}>启用此指标</Label>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="name">股票名称</Label>
-            <Input
-              id="name"
-              placeholder="例如: 创业板50ETF"
-              {...register('name')}
-            />
-            {errors.name && (
-              <p className="text-sm text-red-500">{errors.name.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="monitorType">监控类型</Label>
-            <Select
-              value={watchMonitorType}
-              onValueChange={(value) => {
-                setValue('monitorType', value as 'price' | 'premium' | 'changePercent');
-                if (value === 'price') {
-                  setValue('premiumThreshold', undefined);
-                  setValue('changePercentThreshold', undefined);
-                  clearErrors('premiumThreshold');
-                  clearErrors('changePercentThreshold');
-                } else if (value === 'premium') {
-                  setValue('targetPrice', 0);
-                  setValue('changePercentThreshold', undefined);
-                  clearErrors('targetPrice');
-                  clearErrors('changePercentThreshold');
-                } else if (value === 'changePercent') {
-                  setValue('targetPrice', 0);
-                  setValue('premiumThreshold', undefined);
-                  clearErrors('targetPrice');
-                  clearErrors('premiumThreshold');
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="price">价格监控</SelectItem>
-                <SelectItem value="premium">溢价监控</SelectItem>
-                <SelectItem value="changePercent">涨跌幅监控</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {watchMonitorType === 'price' ? (
-            <div className="space-y-2">
-              <Label htmlFor="targetPrice">目标价格</Label>
-              <Input
-                id="targetPrice"
-                type="number"
-                step="0.0001"
-                placeholder="0.0000"
-                {...register('targetPrice', { valueAsNumber: true })}
-              />
-              {errors.targetPrice && (
-                <p className="text-sm text-red-500">{errors.targetPrice.message}</p>
-              )}
-            </div>
-          ) : watchMonitorType === 'premium' ? (
-            <div className="space-y-2">
-              <Label htmlFor="premiumThreshold">溢价阈值 (%)</Label>
-              <Input
-                id="premiumThreshold"
-                type="number"
-                step="0.0001"
-                placeholder="5.0000"
-                {...register('premiumThreshold', { valueAsNumber: true })}
-              />
-              {errors.premiumThreshold && (
-                <p className="text-sm text-red-500">{errors.premiumThreshold.message}</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="changePercentThreshold">涨跌幅阈值 (%)</Label>
-              <Input
-                id="changePercentThreshold"
-                type="number"
-                step="0.0001"
-                placeholder="5.0000"
-                {...register('changePercentThreshold', { valueAsNumber: true })}
-              />
-              {errors.changePercentThreshold && (
-                <p className="text-sm text-red-500">{errors.changePercentThreshold.message}</p>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="condition">监控条件</Label>
-            <Select
-              value={watch('condition')}
-              onValueChange={(value) => setValue('condition', value as 'above' | 'below')}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="above">
-                  {watchMonitorType === 'price' ? '价格高于目标价格时通知' : 
-                   watchMonitorType === 'premium' ? '溢价高于阈值时通知' : '涨跌幅高于阈值时通知'}
-                </SelectItem>
-                <SelectItem value="below">
-                  {watchMonitorType === 'price' ? '价格低于目标价格时通知' : 
-                   watchMonitorType === 'premium' ? '溢价低于阈值时通知' : '涨跌幅低于阈值时通知'}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 通用错误显示区域 */}
-          {Object.keys(errors).length > 0 && (
+          {errors.metrics && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm font-medium text-red-800 mb-2">请修正以下错误：</p>
-              <ul className="text-sm text-red-700 space-y-1">
-                {errors.code && <li>• {errors.code.message}</li>}
-                {errors.name && <li>• {errors.name.message}</li>}
-                {errors.targetPrice && <li>• {errors.targetPrice.message}</li>}
-                {errors.premiumThreshold && <li>• {errors.premiumThreshold.message}</li>}
-                {errors.changePercentThreshold && <li>• {errors.changePercentThreshold.message}</li>}
-                {errors.monitorType && <li>• {errors.monitorType.message}</li>}
-                {errors.condition && <li>• {errors.condition.message}</li>}
-              </ul>
+              <p className="text-sm text-red-800">{errors.metrics.message}</p>
             </div>
           )}
 
@@ -418,7 +403,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
             <Button type="button" variant="outline" onClick={handleClose}>
               取消
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading || metrics.length === 0}>
               {isLoading ? (isEditMode ? '更新中...' : '添加中...') : (isEditMode ? '更新监控' : '添加监控')}
             </Button>
           </DialogFooter>
