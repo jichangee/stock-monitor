@@ -281,8 +281,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
             <div className="bg-muted/50 px-4 py-2 border-b">
               <div className="grid grid-cols-12 gap-1 text-xs font-medium text-muted-foreground">
                 <div className="col-span-3">股票信息</div>
-                <div className="col-span-1">价格</div>
-                <div className="col-span-1">涨跌</div>
+                <div className="col-span-2">价格</div>
+                <div className="col-span-2">涨跌</div>
                 <div className="col-span-1">溢价</div>
                 <div className="col-span-3">指标</div>
                 <div className="col-span-1">操作</div>
@@ -348,7 +348,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       
                       {/* 当前价格 */}
-                      <div className="col-span-1">
+                      <div className="col-span-2">
                         {currentData ? (
                           <div className="font-semibold text-sm">¥{currentData.currentPrice.toFixed(3)}</div>
                         ) : (
@@ -357,7 +357,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       </div>
                       
                       {/* 涨跌幅 */}
-                      <div className="col-span-1">
+                      <div className="col-span-2">
                         {currentData ? (
                           <div className={`font-semibold text-sm ${
                             currentData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'
