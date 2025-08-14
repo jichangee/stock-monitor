@@ -3,7 +3,7 @@ import { StockData } from '@/types/stock';
 const STOCK_API_BASE = 'https://qt.gtimg.cn/q=';
 
 // 从东方财富API获取股票名称（备用方案）
-async function fetchStockNameFromEastmoney(code: string): Promise<string | null> {
+export async function fetchStockNameFromEastmoney(code: string): Promise<string | null> {
   try {
     // 转换代码格式
     let apiCode = code;
@@ -38,50 +38,25 @@ async function fetchStockNameFromEastmoney(code: string): Promise<string | null>
   }
 }
 
-export async function fetchStockData(code: string): Promise<StockData | null> {
+// 解析单个股票数据
+function parseStockData(code: string, dataString: string): StockData | null {
   try {
-    const url = `${STOCK_API_BASE}${code}`;
-    console.log('正在获取股票数据:', url);
+    const data = dataString.split('~');
     
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const text = await response.text();
-    console.log('原始响应数据:', text);
-    
-    // 尝试多种数据格式解析
-    let data: string[] | null = null;
-    
-    // 格式1: v_xxx="..."
-    const match1 = text.match(/v_([^=]+)="([^"]+)"/);
-    if (match1) {
-      data = match1[2].split('~');
-      console.log('使用格式1解析，数据数组:', data);
-    }
-    
-    // 格式2: 直接的数据字符串
-    if (!data && text.includes('~')) {
-      data = text.split('~');
-      console.log('使用格式2解析，数据数组:', data);
-    }
-    
-    if (!data || data.length < 32) {
-      console.error('无法解析股票数据格式或数据字段不足:', {
-        text: text.substring(0, 200) + '...',
-        dataLength: data?.length || 0
+    if (data.length < 32) {
+      console.error('股票数据字段不足:', {
+        code,
+        dataLength: data.length,
+        data: dataString.substring(0, 200) + '...'
       });
       return null;
     }
     
     const changePercent = parseFloat(data[32]) || 0;
-    let finalName = ''
-    finalName = await fetchStockNameFromEastmoney(code) || '';
     
     const stockData: StockData = {
-      code: data[0],
-      name: finalName,
+      code: data[0] || code,
+      name: data[1] || '',
       currentPrice: parseFloat(data[3]) || 0,
       change: parseFloat(data[31]) || 0,
       changePercent: changePercent,
@@ -93,11 +68,70 @@ export async function fetchStockData(code: string): Promise<StockData | null> {
       timestamp: Date.now()
     };
     
-    console.log('构建的股票数据:', stockData);
     return stockData;
     
   } catch (error) {
-    console.error('获取股票数据失败:', error);
+    console.error(`解析股票数据失败 ${code}:`, error);
+    return null;
+  }
+}
+
+// 批量获取股票数据
+export async function fetchBatchStockData(codes: string[]): Promise<Record<string, StockData>> {
+  if (codes.length === 0) {
+    return {};
+  }
+  
+  try {
+    // 构建批量请求URL
+    const url = `${STOCK_API_BASE}${codes.join(',')}`;
+    console.log('正在批量获取股票数据:', url);
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const text = await response.text();
+    console.log('批量API响应数据长度:', text.length);
+    
+    const result: Record<string, StockData> = {};
+    
+    // 解析批量响应
+    // 格式: v_sz159509="...", v_sh513500="..."
+    const stockDataMatches = text.match(/v_([^=]+)="([^"]+)"/g);
+    
+    if (stockDataMatches) {
+      for (const match of stockDataMatches) {
+        const stockMatch = match.match(/v_([^=]+)="([^"]+)"/);
+        if (stockMatch) {
+          const stockCode = stockMatch[1];
+          const stockDataString = stockMatch[2];
+          
+          const stockData = parseStockData(stockCode, stockDataString);
+          if (stockData) {
+            result[stockCode] = stockData;
+          }
+        }
+      }
+    }
+    
+    console.log(`批量获取完成，成功获取 ${Object.keys(result).length}/${codes.length} 只股票数据`);
+    return result;
+    
+  } catch (error) {
+    console.error('批量获取股票数据失败:', error);
+    return {};
+  }
+}
+
+// 获取单个股票数据（保持向后兼容）
+export async function fetchStockData(code: string): Promise<StockData | null> {
+  try {
+    const batchResult = await fetchBatchStockData([code]);
+    return batchResult[code] || null;
+  } catch (error) {
+    console.error('获取单个股票数据失败:', error);
     return null;
   }
 }

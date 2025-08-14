@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { fetchStockData } from '@/lib/stockApi';
+import { fetchBatchStockData } from '@/lib/stockApi';
 import { isWithinTradingHours } from '@/lib/utils';
 
 interface IndexData {
@@ -32,11 +32,16 @@ export function IndexMonitor() {
     }
 
     setIsLoading(true);
-    const newIndexData: Record<string, IndexData> = {};
-
-    for (const index of INDEX_CODES) {
-      try {
-        const data = await fetchStockData(index.code);
+    
+    try {
+      // 使用批量请求一次性获取所有指数数据
+      const codes = INDEX_CODES.map(index => index.code);
+      const batchData = await fetchBatchStockData(codes);
+      
+      const newIndexData: Record<string, IndexData> = {};
+      
+      for (const index of INDEX_CODES) {
+        const data = batchData[index.code];
         if (data) {
           newIndexData[index.code] = {
             code: index.code,
@@ -47,13 +52,14 @@ export function IndexMonitor() {
             timestamp: data.timestamp
           };
         }
-      } catch (error) {
-        console.error(`获取${index.name}数据失败:`, error);
       }
+      
+      setIndexData(newIndexData);
+    } catch (error) {
+      console.error('获取指数数据失败:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIndexData(newIndexData);
-    setIsLoading(false);
   };
 
   useEffect(() => {

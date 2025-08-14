@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { addStockMonitor, updateStockMonitor } from '@/lib/stockMonitor';
-import { formatStockCode, fetchStockName } from '@/lib/stockApi';
+import { formatStockCode, fetchStockNameFromEastmoney } from '@/lib/stockApi';
 import { toast } from 'sonner';
 import { StockMonitor, MonitorMetric } from '@/types/stock';
 import { Search, Loader2, Plus, Trash2 } from 'lucide-react';
@@ -136,7 +136,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
     setIsSearching(true);
     try {
       const formattedCode = formatStockCode(watchCode);
-      const name = await fetchStockName(formattedCode);
+      const name = await fetchStockNameFromEastmoney(formattedCode);
       
       if (name) {
         setValue('name', name);

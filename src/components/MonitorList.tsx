@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { getStockMonitors, updateStockMonitor, deleteStockMonitor, markMetricNotificationSent } from '@/lib/stockMonitor';
-import { fetchStockData } from '@/lib/stockApi';
+import { fetchBatchStockData } from '@/lib/stockApi';
 import { sendStockMonitorNotification } from '@/lib/notifications';
 import { StockMonitor, StockData, MonitorMetric } from '@/types/stock';
 import { toast } from 'sonner';
@@ -88,24 +88,34 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     }
     
     setIsLoading(true);
-    const newStockData: Record<string, StockData> = {};
     
-    for (const monitor of monitors.filter(m => m.isActive)) {
-      try {
-        const data = await fetchStockData(monitor.code);
+    try {
+      // 获取所有活跃监控的股票代码
+      const activeCodes = monitors.filter(m => m.isActive).map(m => m.code);
+      
+      if (activeCodes.length === 0) {
+        setIsLoading(false);
+        return;
+      }
+      
+      // 批量获取股票数据
+      const newStockData = await fetchBatchStockData(activeCodes);
+      
+      // 检查每个监控是否需要发送通知
+      for (const monitor of monitors.filter(m => m.isActive)) {
+        const data = newStockData[monitor.code];
         if (data) {
-          newStockData[monitor.code] = data;
-          
-          // 检查是否需要发送通知
           checkAndSendNotification(monitor, data);
         }
-      } catch (error) {
-        console.error(`获取${monitor.code}数据失败:`, error);
       }
+      
+      setStockData(newStockData);
+      
+    } catch (error) {
+      console.error('批量获取股票数据失败:', error);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setStockData(newStockData);
-    setIsLoading(false);
   }, [monitors, checkAndSendNotification]);
 
   useEffect(() => {
