@@ -8,6 +8,7 @@ import { MonitorDialog } from '@/components/MonitorDialog';
 import { MonitorList } from '@/components/MonitorList';
 import { IndexMonitor } from '@/components/IndexMonitor';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { AdminPanel } from '@/components/AdminPanel';
 import { requestNotificationPermission } from '@/lib/notifications';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -161,6 +162,13 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* 管理员面板 */}
+        {session && (
+          <div className="mt-6">
+            <AdminPanel />
+          </div>
+        )}
 
         <div className="mt-6 p-4 bg-muted rounded-lg">
           <h2 className="text-lg font-semibold mb-3">使用说明</h2>

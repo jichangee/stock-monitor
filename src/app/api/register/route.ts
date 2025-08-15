@@ -79,9 +79,12 @@ export async function POST(req: Request) {
       const hashedPassword = await bcrypt.hash(password, 10)
       const userId = randomUUID();
 
+      // 检查是否为管理员账号
+      const isAdmin = email === 'moxuy' && password === 'Ging9597';
+      
       await sql`
-        INSERT INTO "User" ("id", "name", "email", "password", "emailVerified") 
-        VALUES (${userId}, ${name}, ${email}, ${hashedPassword}, ${new Date().toISOString()})
+        INSERT INTO "User" ("id", "name", "email", "password", "emailVerified", "role") 
+        VALUES (${userId}, ${name}, ${email}, ${hashedPassword}, ${new Date().toISOString()}, ${isAdmin ? 'admin' : 'user'})
       `;
 
       // 5. Delete the verification token after use

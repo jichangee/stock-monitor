@@ -365,7 +365,6 @@ const AuthForm = () => {
               <Input
                 id="email"
                 name="email"
-                type="email"
                 autoComplete="email"
                 required
                 value={formData.email}
