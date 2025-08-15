@@ -97,7 +97,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('click', handleUserActivity);
       document.removeEventListener('scroll', handleUserActivity);
     };
-  }, []);
+  }, [settings]);
 
   const updateSettings = (newSettings: Partial<SettingsData>) => {
     const updatedSettings = { ...settings, ...newSettings, lastUpdated: Date.now() };

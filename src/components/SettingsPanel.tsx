@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Settings, Bell, TestTube, Zap, Clock, Download, Upload, Database, FileText } from 'lucide-react';
+import { Settings, Bell, TestTube, Zap, Clock, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSettings } from '@/contexts/SettingsContext';
 import { requestNotificationPermission, sendNotification } from '@/lib/notifications';

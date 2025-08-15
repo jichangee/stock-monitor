@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS "StockMonitor" (

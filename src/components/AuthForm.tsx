@@ -48,12 +48,6 @@ const AuthForm = () => {
     }
   }
 
-  const socialAction = (action: string) => {
-    setIsLoading(true)
-    setError(null)
-    signIn(action, { callbackUrl: '/' })
-  }
-
   const startCountdown = () => {
     setCountdown(60)
     const timer = setInterval(() => {
@@ -113,7 +107,7 @@ const AuthForm = () => {
         
         toast.error(errorMessage)
       }
-    } catch (error) {
+    } catch (_error) {
       const errorMessage = '网络错误，请检查网络连接后重试'
       setError({
         message: errorMessage,
@@ -170,7 +164,7 @@ const AuthForm = () => {
             
             toast.error(errorMessage)
           }
-        } catch (error) {
+        } catch (_error) {
           const errorMessage = '网络错误，请检查网络连接后重试'
           setError({
             message: errorMessage,

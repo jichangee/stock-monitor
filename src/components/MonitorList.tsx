@@ -16,7 +16,7 @@ import { fetchBatchStockData } from '@/lib/stockApi';
 import { sendStockMonitorNotification } from '@/lib/notifications';
 import { StockMonitor, StockData, MonitorMetric } from '@/types/stock';
 import { toast } from 'sonner';
-import { Trash2, BellOff, Edit, TrendingUp, DollarSign, RefreshCw, Clock, AlertCircle } from 'lucide-react';
+import { Trash2, Edit, TrendingUp, DollarSign, RefreshCw, Clock, AlertCircle } from 'lucide-react';
 import { isWithinTradingHours, getTradingStatus, formatTime, isNewTradingDay } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -31,14 +31,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   const [stockData, setStockData] = useState<Record<string, StockData>>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadMonitors();
-  }, [refreshTrigger]);
-
-  const loadMonitors = async () => {
+  const loadMonitors = useCallback(async () => {
     const loadedMonitors = await getStockMonitors();
     setMonitors(loadedMonitors);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadMonitors();
+  }, [loadMonitors, refreshTrigger]);
 
   const checkAndSendNotification = useCallback(async (monitor: StockMonitor, stockData: StockData) => {
     if (!isWithinTradingHours()) {
@@ -54,7 +54,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     for (const metric of (monitor.metrics ?? [])) {
       if (metric.isActive && !metric.notificationSent) {
         let shouldNotify = false;
-        let message = '';
+        
         const currentPrice = stockData.currentPrice;
         const changePercent = stockData.changePercent;
         const premium = stockData.premium;
@@ -63,22 +63,19 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
           if ((metric.condition === 'above' && currentPrice >= metric.targetPrice) ||
               (metric.condition === 'below' && currentPrice <= metric.targetPrice)) {
             shouldNotify = true;
-            message = `${monitor.name} 价格达到 ${metric.targetPrice}`;
           }
         } else if (metric.type === 'premium' && metric.premiumThreshold) {
             if ((metric.condition === 'above' && premium >= metric.premiumThreshold) ||
                 (metric.condition === 'below' && premium <= metric.premiumThreshold)) {
               shouldNotify = true;
-              message = `${monitor.name} 溢价率达到 ${premium.toFixed(2)}%`;
             }
         } else if (metric.type === 'changePercent' && metric.changePercentThreshold) {
             if ((metric.condition === 'above' && changePercent >= metric.changePercentThreshold) ||
                 (metric.condition === 'below' && changePercent <= metric.changePercentThreshold)) {
               shouldNotify = true;
-              message = `${monitor.name} 涨跌幅达到 ${changePercent.toFixed(2)}%`;
             }
         }
-
+        
         if (shouldNotify) {
           sendStockMonitorNotification(monitor, metric, stockData);
           await markMetricNotificationSent(monitor.id, metric.id);
@@ -138,22 +135,6 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     if (updated) {
       loadMonitors();
       toast.success(`监控已${updated.isActive ? '启用' : '禁用'}`);
-    }
-  };
-
-  const toggleMetric = async (monitor: StockMonitor, metricId: string) => {
-    const metric = (monitor.metrics ?? []).find(m => m.id === metricId);
-    if (!metric) return;
-
-    const updatedMetrics = (monitor.metrics ?? []).map(m => 
-      m.id === metricId ? { ...m, isActive: !m.isActive } : m
-    );
-
-    const updated = await updateStockMonitor(monitor.id, { metrics: updatedMetrics });
-
-    if (updated) {
-      loadMonitors();
-      toast.success(`指标已${!metric.isActive ? '启用' : '禁用'}`);
     }
   };
 

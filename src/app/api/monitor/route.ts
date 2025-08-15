@@ -4,8 +4,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+export async function GET() {
+  const session:any = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session:any = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session:any = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -92,7 +92,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Missing monitor ID' }, { status: 400 });
     }
 
-    const [updatedMonitor] = await sql`
+    await sql`
       UPDATE "StockMonitor"
       SET "updatedAt" = NOW(),
           code = ${updates.code},
@@ -133,7 +133,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session:any = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

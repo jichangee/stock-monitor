@@ -1,11 +1,12 @@
-import NextAuth from 'next-auth/next'
+import NextAuth, { NextAuthOptions, User, Account, Session } from 'next-auth'
+import { JWT } from 'next-auth/jwt'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { sql } from '@/lib/db'
 import bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
@@ -17,7 +18,7 @@ export const authOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials: any) {
+      async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           return null
         }
@@ -55,7 +56,7 @@ export const authOptions = {
     strategy: 'jwt' as const,
   },
   callbacks: {
-    async signIn({ user, account }: any) {
+    async signIn({ user, account }: { user: User; account: Account | null }) {
       if (account?.provider === 'google') {
         try {
           const users = await sql`SELECT * FROM "User" WHERE "email" = ${user.email}`;
@@ -84,7 +85,7 @@ export const authOptions = {
       }
       return true; // Allow sign in for other providers
     },
-    async jwt({ token, user }: any) {
+    async jwt({ token, user }: { token: JWT; user: User }) {
       if (user) {
         // On sign in, `user` object is available. We need to fetch the ID from DB if it's not there.
         if (!token.id) {
@@ -97,7 +98,7 @@ export const authOptions = {
       }
       return token
     },
-    async session({ session, token }: any) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as 'user' | 'admin'

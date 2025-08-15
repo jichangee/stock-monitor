@@ -1,6 +1,5 @@
 import { StockMonitor } from '@/types/stock';
 import { getStockMonitors, addStockMonitor, updateStockMonitor } from './stockMonitor';
-import { generateUUID } from './utils';
 
 // 设置数据的接口定义
 export interface SettingsData {

@@ -7,7 +7,7 @@ export async function getStockMonitors(): Promise<StockMonitor[]> {
       throw new Error('Failed to fetch monitors');
     }
     const data = await response.json();
-    return (Array.isArray(data) ? data : []).map((m: any) => ({
+    return (Array.isArray(data) ? data : []).map((m: StockMonitor) => ({
       ...m,
       metrics: Array.isArray(m?.metrics) ? m.metrics : [],
       createdAt: m?.createdAt ? new Date(m.createdAt) : undefined,

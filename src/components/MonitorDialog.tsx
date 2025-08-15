@@ -122,10 +122,31 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
   };
 
   const updateMetric = (index: number, field: keyof MonitorMetric, value: string | number | boolean) => {
-    const updatedMetrics = [...metrics];
-    updatedMetrics[index] = { ...updatedMetrics[index], [field]: value };
+    const updatedMetrics = metrics.map((m, i) => {
+      if (i === index) {
+        const newMetric = { ...m, [field]: value };
+        
+        // 类型切换时，重置其他类型的值
+        if (field === 'type') {
+          if (value === 'price') {
+            newMetric.premiumThreshold = 0;
+            newMetric.changePercentThreshold = 0;
+          } else if (value === 'premium') {
+            newMetric.targetPrice = 0;
+            newMetric.changePercentThreshold = 0;
+          } else if (value === 'changePercent') {
+            newMetric.targetPrice = 0;
+            newMetric.premiumThreshold = 0;
+          }
+        }
+        
+        return newMetric;
+      }
+      return m;
+    });
+    
     setMetrics(updatedMetrics);
-    setValue('metrics', updatedMetrics);
+    setValue('metrics', updatedMetrics, { shouldValidate: true });
   };
 
   const searchStockName = async () => {
@@ -145,7 +166,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
       } else {
         toast.error('未找到该股票，请检查代码是否正确');
       }
-    } catch {
+    } catch (_error) {
       toast.error('获取股票名称失败');
     } finally {
       setIsSearching(false);
