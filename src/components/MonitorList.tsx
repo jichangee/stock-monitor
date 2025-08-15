@@ -5,7 +5,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { getStockMonitors, updateStockMonitor, deleteStockMonitor, markMetricNotificationSent, resetMonitorNotifications } from '@/lib/stockMonitor';
+import {
+  getStockMonitors,
+  updateStockMonitor,
+  deleteStockMonitor,
+  markMetricNotificationSent,
+  resetMonitorNotifications
+} from '@/lib/stockMonitor';
 import { fetchBatchStockData } from '@/lib/stockApi';
 import { sendStockMonitorNotification } from '@/lib/notifications';
 import { StockMonitor, StockData, MonitorMetric } from '@/types/stock';
@@ -29,87 +35,60 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     loadMonitors();
   }, [refreshTrigger]);
 
-  const loadMonitors = () => {
-    const loadedMonitors = getStockMonitors();
+  const loadMonitors = async () => {
+    const loadedMonitors = await getStockMonitors();
     setMonitors(loadedMonitors);
   };
 
-  const checkAndSendNotification = useCallback((monitor: StockMonitor, stockData: StockData) => {
+  const checkAndSendNotification = useCallback(async (monitor: StockMonitor, stockData: StockData) => {
     if (!isWithinTradingHours()) {
       return;
     }
-    
-    // 检查是否为新的交易日，如果是则重置所有指标的通知状态
+
     if (isNewTradingDay(monitor.lastNotificationDate)) {
-      resetMonitorNotifications(monitor.id);
-      // 不在这里重新加载，让外部处理状态更新
-      return; // 本次不发送通知，等待下次更新
+      await resetMonitorNotifications(monitor.id);
+      loadMonitors(); 
+      return;
     }
-    
-    // 检查每个指标
-    monitor.metrics.forEach(metric => {
-      if (!metric.isActive || metric.notificationSent) {
-        return; // 如果指标不活跃或已经发送过通知，跳过
-      }
-      
-      let shouldNotify = false;
-      
-      switch (metric.type) {
-        case 'price':
-          if (metric.condition === 'above') {
-            shouldNotify = stockData.currentPrice >= (metric.targetPrice || 0);
-          } else {
-            shouldNotify = stockData.currentPrice <= (metric.targetPrice || 0);
+
+    for (const metric of (monitor.metrics ?? [])) {
+      if (metric.isActive && !metric.notificationSent) {
+        let shouldNotify = false;
+        let message = '';
+        const currentPrice = stockData.currentPrice;
+        const changePercent = stockData.changePercent;
+        const premium = stockData.premium;
+
+        if (metric.type === 'price' && metric.targetPrice) {
+          if ((metric.condition === 'above' && currentPrice >= metric.targetPrice) ||
+              (metric.condition === 'below' && currentPrice <= metric.targetPrice)) {
+            shouldNotify = true;
+            message = `${monitor.name} 价格达到 ${metric.targetPrice}`;
           }
-          break;
-          
-        case 'premium':
-          if (metric.condition === 'above') {
-            shouldNotify = stockData.premium >= (metric.premiumThreshold || 0);
-          } else {
-            shouldNotify = stockData.premium <= (metric.premiumThreshold || 0);
-          }
-          break;
-          
-        case 'changePercent':
-          if (metric.condition === 'above') {
-            shouldNotify = stockData.changePercent >= (metric.changePercentThreshold || 0);
-          } else {
-            shouldNotify = stockData.changePercent <= (metric.changePercentThreshold || 0);
-          }
-          break;
-      }
-      
-      if (shouldNotify) {
-        // 发送通知并立即标记为已发送，防止重复发送
-        sendStockMonitorNotification(monitor, metric, stockData);
-        markMetricNotificationSent(monitor.id, metric.id);
-        toast.success(`${monitor.name} - ${getMetricDisplayName(metric)} 提醒已发送！`);
-        
-        // 更新本地状态，确保UI立即反映通知已发送
-        setMonitors(prevMonitors => 
-          prevMonitors.map(m => {
-            if (m.id === monitor.id) {
-              return {
-                ...m,
-                metrics: m.metrics.map(met => 
-                  met.id === metric.id ? { ...met, notificationSent: true } : met
-                )
-              };
+        } else if (metric.type === 'premium' && metric.premiumThreshold) {
+            if ((metric.condition === 'above' && premium >= metric.premiumThreshold) ||
+                (metric.condition === 'below' && premium <= metric.premiumThreshold)) {
+              shouldNotify = true;
+              message = `${monitor.name} 溢价率达到 ${premium.toFixed(2)}%`;
             }
-            return m;
-          })
-        );
+        } else if (metric.type === 'changePercent' && metric.changePercentThreshold) {
+            if ((metric.condition === 'above' && changePercent >= metric.changePercentThreshold) ||
+                (metric.condition === 'below' && changePercent <= metric.changePercentThreshold)) {
+              shouldNotify = true;
+              message = `${monitor.name} 涨跌幅达到 ${changePercent.toFixed(2)}%`;
+            }
+        }
+
+        if (shouldNotify) {
+          sendStockMonitorNotification(monitor, metric, stockData);
+          await markMetricNotificationSent(monitor.id, metric.id);
+          loadMonitors();
+        }
       }
-    });
-  }, []);
+    }
+  }, [loadMonitors]);
 
   const updateStockData = useCallback(async () => {
-    if (!isWithinTradingHours()) {
-      console.log('非交易时间，跳过数据更新');
-      return;
-    }
-    
     setIsLoading(true);
     
     try {
@@ -128,14 +107,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       for (const monitor of monitors.filter(m => m.isActive)) {
         const data = newStockData[monitor.code];
         if (data) {
-          checkAndSendNotification(monitor, data);
+          await checkAndSendNotification(monitor, data);
         }
       }
       
       setStockData(newStockData);
       
       // 在数据更新后重新加载监控列表，确保状态同步
-      loadMonitors();
+      await loadMonitors();
       
     } catch (error) {
       console.error('批量获取股票数据失败:', error);
@@ -152,7 +131,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   }, [monitors, updateStockData, settings.updateInterval]);
 
   const toggleMonitor = async (monitor: StockMonitor) => {
-    const updated = updateStockMonitor(monitor.id, { 
+    const updated = await updateStockMonitor(monitor.id, { 
       isActive: !monitor.isActive
     });
     
@@ -163,30 +142,33 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   };
 
   const toggleMetric = async (monitor: StockMonitor, metricId: string) => {
-    const updatedMetrics = monitor.metrics.map(metric => 
-      metric.id === metricId 
-        ? { ...metric, isActive: !metric.isActive }
-        : metric
+    const metric = (monitor.metrics ?? []).find(m => m.id === metricId);
+    if (!metric) return;
+
+    const updatedMetrics = (monitor.metrics ?? []).map(m => 
+      m.id === metricId ? { ...m, isActive: !m.isActive } : m
     );
-    
-    const updated = updateStockMonitor(monitor.id, { metrics: updatedMetrics });
-    
+
+    const updated = await updateStockMonitor(monitor.id, { metrics: updatedMetrics });
+
     if (updated) {
       loadMonitors();
-      toast.success('指标状态已更新');
+      toast.success(`指标已${!metric.isActive ? '启用' : '禁用'}`);
     }
   };
 
-  const handleDelete = (monitor: StockMonitor) => {
-    if (confirm(`确定要删除对 ${monitor.name} 的监控吗？`)) {
-      deleteStockMonitor(monitor.id);
+  const deleteMonitor = async (id: string) => {
+    const success = await deleteStockMonitor(id);
+    if (success) {
       loadMonitors();
       toast.success('监控已删除');
+    } else {
+      toast.error('删除失败');
     }
   };
 
   const resetMetricNotification = (monitor: StockMonitor, metricId: string) => {
-    const updatedMetrics = monitor.metrics.map(metric => 
+    const updatedMetrics = (monitor.metrics ?? []).map(metric => 
       metric.id === metricId 
         ? { ...metric, notificationSent: false }
         : metric
@@ -278,7 +260,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
           
           <Button 
             onClick={updateStockData} 
-            disabled={isLoading || !isWithinTradingHours()}
+            disabled={isLoading}
             variant="outline"
             size="sm"
           >
@@ -310,8 +292,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
             <div className="divide-y">
               {monitors.map((monitor) => {
                 const currentData = stockData[monitor.code];
-                const activeMetrics = monitor.metrics.filter(m => m.isActive);
-                const triggeredMetrics = monitor.metrics.filter(metric => {
+                const activeMetrics = (monitor.metrics ?? []).filter(m => m.isActive);
+                const triggeredMetrics = (monitor.metrics ?? []).filter(metric => {
                   if (!currentData || !metric.isActive || metric.notificationSent) return false;
                   
                   switch (metric.type) {
@@ -399,16 +381,16 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                       {/* 监控指标 */}
                       <div className="col-span-3">
                         <div className="text-xs text-muted-foreground mb-1">
-                          {activeMetrics.length}/{monitor.metrics.length}
+                          {activeMetrics.length}/{(monitor.metrics?.length ?? 0)}
                         </div>
                         <div className="space-y-1">
-                          {monitor.metrics.length === 0 ? (
+                          {(monitor.metrics?.length ?? 0) === 0 ? (
                             <div className="text-xs text-muted-foreground p-1 rounded bg-muted/30">
                               无指标
                             </div>
                           ) : (
                             <>
-                              {monitor.metrics.slice(0, 1).map((metric) => {
+                              {(monitor.metrics ?? []).slice(0, 1).map((metric) => {
                                 const currentValue = getCurrentValue(metric, currentData);
                                 const isTriggered = currentValue && (() => {
                                   switch (metric.type) {
@@ -459,9 +441,9 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                                   </div>
                                 );
                               })}
-                              {monitor.metrics.length > 1 && (
+                              {(monitor.metrics?.length ?? 0) > 1 && (
                                 <div className="text-xs text-muted-foreground">
-                                  +{monitor.metrics.length - 1}
+                                  +{(monitor.metrics?.length ?? 0) - 1}
                                 </div>
                               )}
                             </>
@@ -483,7 +465,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(monitor)}
+                            onClick={() => deleteMonitor(monitor.id)}
                             className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="h-3 w-3" />

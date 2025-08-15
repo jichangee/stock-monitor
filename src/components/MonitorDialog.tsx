@@ -154,51 +154,26 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
 
   const onSubmit = async (data: AddMonitorFormData) => {
     setIsLoading(true);
-    
+
     try {
-      // 允许监控指标为空，不再强制要求至少一个指标
-      const formattedCode = formatStockCode(data.code);
-      
+      const monitorData = {
+        ...data,
+        metrics: metrics.map(m => ({ ...m, notificationSent: false })),
+        isActive: editMonitor ? editMonitor.isActive : true,
+      };
+
       if (isEditMode && editMonitor) {
-        // 编辑模式
-        const updateData: Partial<StockMonitor> = {
-          code: formattedCode,
-          name: data.name,
-          metrics: metrics
-        };
-        
-        const updated = updateStockMonitor(editMonitor.id, updateData);
-        
-        if (updated) {
-          toast.success('监控更新成功！');
-          onOpenChange(false);
-          onMonitorAdded();
-        } else {
-          toast.error('更新监控失败，请重试');
-        }
+        await updateStockMonitor(editMonitor.id, monitorData);
+        toast.success('监控已更新');
       } else {
-        // 添加模式
-        const monitorData = {
-          code: formattedCode,
-          name: data.name,
-          metrics: metrics,
-          isActive: true
-        };
-        
-        const newMonitor = addStockMonitor(monitorData);
-        
-        if (newMonitor && newMonitor.id) {
-          toast.success('监控添加成功！');
-          onOpenChange(false);
-          onMonitorAdded();
-        } else {
-          toast.error('添加监控失败，请重试');
-        }
+        await addStockMonitor(monitorData);
+        toast.success('监控已添加');
       }
+      
+      onMonitorAdded();
+      onOpenChange(false);
     } catch (error) {
-      console.error('提交表单时发生错误:', error);
-      const errorMessage = error instanceof Error ? error.message : (isEditMode ? '更新监控失败，请重试' : '添加监控失败，请重试');
-      toast.error(errorMessage);
+      toast.error('操作失败，请重试');
     } finally {
       setIsLoading(false);
     }
