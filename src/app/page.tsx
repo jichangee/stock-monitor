@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { MonitorDialog } from '@/components/MonitorDialog';
 import { MonitorList } from '@/components/MonitorList';
 import { IndexMonitor } from '@/components/IndexMonitor';
@@ -9,11 +12,13 @@ import { requestNotificationPermission } from '@/lib/notifications';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { StockMonitor } from '@/types/stock';
-import { Plus, Clock } from 'lucide-react';
+import { Plus, Clock, LogIn, LogOut } from 'lucide-react';
 import { isWithinTradingHours, getTradingStatus } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const { settings } = useSettings();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [editingMonitor, setEditingMonitor] = useState<StockMonitor | null>(null);
@@ -21,17 +26,12 @@ export default function Home() {
   const [tradingStatus, setTradingStatus] = useState('');
 
   useEffect(() => {
-    // 请求通知权限
     requestNotificationPermission();
-    
-    // 更新交易状态
     const updateTradingStatus = () => {
       setTradingStatus(getTradingStatus());
     };
-    
     updateTradingStatus();
-    const interval = setInterval(updateTradingStatus, 60000); // 每分钟更新一次
-    
+    const interval = setInterval(updateTradingStatus, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -39,12 +39,23 @@ export default function Home() {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleAuthCheck = () => {
+    if (status === 'unauthenticated') {
+      toast.info('请先登录再执行此操作。');
+      router.push('/auth');
+      return false;
+    }
+    return true;
+  }
+
   const handleEditMonitor = (monitor: StockMonitor) => {
+    if (!handleAuthCheck()) return;
     setEditingMonitor(monitor);
     setDialogOpen(true);
   };
 
   const handleAddMonitor = () => {
+    if (!handleAuthCheck()) return;
     setEditingMonitor(null);
     setDialogOpen(true);
   };
@@ -56,16 +67,40 @@ export default function Home() {
     }
   };
 
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>加载中...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-4">
-        <div className="text-center mb-4">
-          <h1 className="text-3xl font-bold text-foreground mb-1">
-            股票监控系统
-          </h1>
-          <p className="text-muted-foreground text-base">
-            实时监控股票价格、溢价和涨跌幅，达到目标时自动发送通知
-          </p>
+        <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+            <div className="text-left">
+                <h1 className="text-3xl font-bold text-foreground mb-1">
+                    股票监控系统
+                </h1>
+                <p className="text-muted-foreground text-base">
+                  实时监控股票价格、溢价和涨跌幅，达到目标时自动发送通知
+                </p>
+            </div>
+            {session ? (
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">欢迎, {session.user?.name || session.user?.email}</p>
+                <Button onClick={() => signOut()} variant="outline" size="sm">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    登出
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={() => router.push('/auth')} variant="outline" size="sm">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  登录 / 注册
+              </Button>
+            )}
         </div>
 
         {/* 交易状态提示 */}
@@ -96,11 +131,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 主要指数监控 */}
         <IndexMonitor />
 
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
-          {/* 监控列表 */}
           <div className="w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">监控列表</h2>
@@ -116,14 +149,19 @@ export default function Home() {
                 </Button>
               </div>
             </div>
-            <MonitorList 
-              refreshTrigger={refreshTrigger}
-              onEditMonitor={handleEditMonitor}
-            />
+            {session ? (
+              <MonitorList 
+                refreshTrigger={refreshTrigger}
+                onEditMonitor={handleEditMonitor}
+              />
+            ) : (
+              <div className="text-center py-10 border-2 border-dashed rounded-lg text-muted-foreground">
+                <p>请登录以查看和管理您的监控列表。</p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 使用说明 */}
         <div className="mt-6 p-4 bg-muted rounded-lg">
           <h2 className="text-lg font-semibold mb-3">使用说明</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-muted-foreground">
@@ -170,7 +208,6 @@ export default function Home() {
         </div>
       </div>
       
-      {/* 弹窗组件 */}
       <MonitorDialog
         open={dialogOpen}
         onOpenChange={handleDialogClose}

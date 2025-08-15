@@ -22,6 +22,12 @@
 - **防重复**：避免重复发送相同通知
 - **权限管理**：自动请求和管理通知权限
 
+### 🔐 用户认证系统
+- **邮箱验证**：支持邮箱注册和登录
+- **Google OAuth**：支持 Google 账号登录
+- **验证码**：安全的邮箱验证码系统
+- **会话管理**：安全的用户会话管理
+
 ### 🎯 实时数据更新
 - **自动更新**：交易时间内每10秒自动更新数据
 - **实时显示**：当前价格、涨跌幅、溢价、更新时间
@@ -33,8 +39,10 @@
 - **Next.js 15**：最新的 React 框架
 - **TypeScript**：完整的类型安全
 - **Tailwind CSS**：现代化的 UI 设计
+- **NextAuth.js**：完整的身份验证解决方案
+- **Resend**：专业的邮件发送服务
+- **PostgreSQL**：可靠的数据库存储
 - **实时数据**：集成股票 API 获取实时数据
-- **本地存储**：使用 localStorage 保存监控配置
 - **响应式设计**：支持各种设备尺寸
 
 ## 📦 安装和运行
@@ -42,6 +50,39 @@
 ### 环境要求
 - Node.js 18+ 
 - npm 或 yarn
+- PostgreSQL 数据库
+- Resend 邮件服务账号
+
+### 环境变量设置
+
+在项目根目录创建 `.env.local` 文件，包含以下配置：
+
+```bash
+# 数据库连接
+DATABASE_URL="postgresql://username:password@localhost:5432/stock_monitor"
+
+# NextAuth 配置
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret-key-here"
+
+# Google OAuth 配置
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+
+# Resend 邮件服务
+RESEND_API_KEY="your-resend-api-key"
+
+# 股票 API（可选）
+STOCK_API_KEY="your-stock-api-key"
+```
+
+### 数据库设置
+
+1. 创建 PostgreSQL 数据库
+2. 运行数据库初始化脚本：
+```bash
+node setup-db.cjs
+```
 
 ### 安装依赖
 ```bash
@@ -60,6 +101,12 @@ npm start
 ```
 
 ## 🎮 使用说明
+
+### 用户注册和登录
+1. 访问 `/auth` 页面进行注册或登录
+2. 支持邮箱密码注册和 Google OAuth 登录
+3. 邮箱注册需要验证码验证
+4. 登录后可以访问完整的监控功能
 
 ### 添加监控
 1. 点击"添加监控"按钮
@@ -107,13 +154,17 @@ npm start
 
 ## 🔒 数据安全
 
-- **本地存储**：所有数据存储在浏览器本地
-- **无服务器**：不需要外部服务器或数据库
-- **隐私保护**：不会上传任何个人信息
-- **离线支持**：配置数据本地保存
+- **用户认证**：安全的用户身份验证
+- **数据库存储**：使用 PostgreSQL 安全存储数据
+- **邮件验证**：邮箱验证码确保用户真实性
+- **会话管理**：安全的用户会话管理
+- **隐私保护**：不会泄露用户个人信息
 
 ## 🚧 注意事项
 
+- 需要设置正确的环境变量
+- 需要配置 PostgreSQL 数据库
+- 需要 Resend 邮件服务账号
 - 仅在交易时间内进行监控
 - 需要浏览器支持桌面通知
 - 股票数据来源于公开 API
