@@ -42,15 +42,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     // 检查是否为新的交易日，如果是则重置所有指标的通知状态
     if (isNewTradingDay(monitor.lastNotificationDate)) {
       resetMonitorNotifications(monitor.id);
-      // 重新加载监控数据以获取更新后的状态
-      loadMonitors();
+      // 不在这里重新加载，让外部处理状态更新
       return; // 本次不发送通知，等待下次更新
     }
     
     // 检查每个指标
     monitor.metrics.forEach(metric => {
       if (!metric.isActive || metric.notificationSent) {
-        return;
+        return; // 如果指标不活跃或已经发送过通知，跳过
       }
       
       let shouldNotify = false;
@@ -82,9 +81,25 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       }
       
       if (shouldNotify) {
+        // 发送通知并立即标记为已发送，防止重复发送
         sendStockMonitorNotification(monitor, metric, stockData);
         markMetricNotificationSent(monitor.id, metric.id);
         toast.success(`${monitor.name} - ${getMetricDisplayName(metric)} 提醒已发送！`);
+        
+        // 更新本地状态，确保UI立即反映通知已发送
+        setMonitors(prevMonitors => 
+          prevMonitors.map(m => {
+            if (m.id === monitor.id) {
+              return {
+                ...m,
+                metrics: m.metrics.map(met => 
+                  met.id === metric.id ? { ...met, notificationSent: true } : met
+                )
+              };
+            }
+            return m;
+          })
+        );
       }
     });
   }, []);
@@ -119,12 +134,15 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       
       setStockData(newStockData);
       
+      // 在数据更新后重新加载监控列表，确保状态同步
+      loadMonitors();
+      
     } catch (error) {
       console.error('批量获取股票数据失败:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [monitors, checkAndSendNotification]);
+  }, [monitors, checkAndSendNotification, loadMonitors]);
 
   useEffect(() => {
     if (monitors.length > 0 && isWithinTradingHours()) {
