@@ -13,7 +13,10 @@ async function setupDatabase() {
         "email" TEXT UNIQUE,
         "emailVerified" TIMESTAMPTZ,
         "image" TEXT,
-        "password" TEXT
+        "password" TEXT,
+        "role" TEXT DEFAULT 'user',
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
       );
     `;
     console.log('User table created successfully.');
@@ -47,6 +50,23 @@ async function setupDatabase() {
       );
     `;
     console.log('Stock table created successfully.');
+
+    console.log('Creating StockMonitor table...');
+    await sql`
+      CREATE TABLE IF NOT EXISTS "StockMonitor" (
+        "id" UUID PRIMARY KEY,
+        "userId" UUID NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+        "symbol" TEXT NOT NULL,
+        "targetPrice" DECIMAL(10,2),
+        "targetPremium" DECIMAL(5,2),
+        "targetChangePercent" DECIMAL(5,2),
+        "notificationEnabled" BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", "symbol")
+      );
+    `;
+    console.log('StockMonitor table created successfully.');
 
     console.log('Creating VerificationToken table...');
     await sql`

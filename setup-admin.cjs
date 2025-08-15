@@ -7,6 +7,8 @@ if (!process.env.STOCK_DATABASE_URL) {
 }
 
 const sql = neon(process.env.STOCK_DATABASE_URL);
+const email = process.env.ADMIN_EMAIL;
+const password = process.env.ADMIN_PASSWORD;
 
 async function setupAdmin() {
   try {
@@ -23,7 +25,7 @@ async function setupAdmin() {
 
     // 2. 检查管理员账号是否存在
     console.log('检查管理员账号...');
-    const adminUsers = await sql`SELECT * FROM "User" WHERE "email" = 'moxuy'`;
+    const adminUsers = await sql`SELECT * FROM "User" WHERE "email" = ${email}`;
     
     if (adminUsers.length === 0) {
       console.log('创建管理员账号...');
@@ -35,18 +37,18 @@ async function setupAdmin() {
       
       await sql`
         INSERT INTO "User" ("id", "name", "email", "password", "emailVerified", "role") 
-        VALUES (${adminId}, '管理员', 'moxuy', ${hashedPassword}, ${new Date().toISOString()}, 'admin')
+        VALUES (${adminId}, '管理员', ${email}, ${hashedPassword}, ${new Date().toISOString()}, 'admin')
       `;
       
       console.log('✓ 管理员账号创建成功');
-      console.log('   - 邮箱: moxuy');
-      console.log('   - 密码: Ging9597');
+      console.log('   - 邮箱: ${email}');
+      console.log('   - 密码: ${password}');
       console.log('   - 角色: admin');
     } else {
       // 更新现有账号为管理员
       if (adminUsers[0].role !== 'admin') {
         console.log('更新现有账号为管理员...');
-        await sql`UPDATE "User" SET "role" = 'admin' WHERE "email" = 'moxuy'`;
+        await sql`UPDATE "User" SET "role" = 'admin' WHERE "email" = ${email}`;
         console.log('✓ 现有账号已更新为管理员');
       } else {
         console.log('✓ 管理员账号已存在');
@@ -74,8 +76,8 @@ async function setupAdmin() {
 
     console.log('\n✓ 管理员模块设置完成！');
     console.log('\n管理员账号信息:');
-    console.log('  邮箱: moxuy');
-    console.log('  密码: Ging9597');
+    console.log('  邮箱: ${email}');
+    console.log('  密码: ${password}');
     console.log('  角色: admin');
     console.log('\n请使用此账号登录系统，您将看到管理员面板。');
 
