@@ -31,8 +31,8 @@ export interface StockMonitor {
   metrics: MonitorMetric[]; // 支持多个指标
   isActive: boolean;
   lastNotificationDate?: string; // 最后通知日期，用于每日重置
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // 兼容旧版本的接口
@@ -47,8 +47,8 @@ export interface LegacyStockMonitor {
   changePercentThreshold?: number;
   isActive: boolean;
   notificationSent: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface StockApiResponse {
