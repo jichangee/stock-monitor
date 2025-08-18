@@ -54,6 +54,11 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     loadMonitors();
   }, [loadMonitors]);
 
+  // 当外部触发刷新时（例如添加/编辑完成后），重新请求监控数据
+  useEffect(() => {
+    loadMonitors();
+  }, [refreshTrigger, loadMonitors]);
+
   const checkAndSendNotification = useCallback(async (monitor: StockMonitor, stockData: StockData) => {
     if (!(await isWithinTradingHours())) {
       return;
@@ -167,6 +172,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     if (updated) {
       setMonitors(prev => prev.map(m => m.id === updated.id ? updated : m));
       toast.success(`监控已${updated.isActive ? '启用' : '禁用'}`);
+      // 以服务端为准再拉取一次
+      await loadMonitors();
     }
   };
 
@@ -175,6 +182,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     if (success) {
       setMonitors(prev => prev.filter(m => m.id !== id));
       toast.success('监控已删除');
+      // 删除后重新获取一次，保持与服务端一致
+      await loadMonitors();
     } else {
       toast.error('删除失败');
     }
@@ -190,6 +199,8 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     updateStockMonitor(monitor.id, { metrics: updatedMetrics });
     setMonitors(prev => prev.map(m => m.id === monitor.id ? { ...m, metrics: updatedMetrics } : m));
     toast.success('通知状态已重置');
+    // 重置后也可选择刷新一次，避免潜在的状态偏差
+    loadMonitors();
   };
 
   const handleEdit = (monitor: StockMonitor) => {
