@@ -25,11 +25,13 @@ export default function Home() {
   const [editingMonitor, setEditingMonitor] = useState<StockMonitor | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tradingStatus, setTradingStatus] = useState('');
+  const [isTrading, setIsTrading] = useState(false);
 
   useEffect(() => {
     requestNotificationPermission();
-    const updateTradingStatus = () => {
-      setTradingStatus(getTradingStatus());
+    const updateTradingStatus = async () => {
+      setTradingStatus(await getTradingStatus());
+      setIsTrading(await isWithinTradingHours());
     };
     updateTradingStatus();
     const interval = setInterval(updateTradingStatus, 60000);
@@ -106,24 +108,24 @@ export default function Home() {
 
         {/* 交易状态提示 */}
         <div className={`mb-4 p-3 rounded-lg border ${
-          isWithinTradingHours() 
+          isTrading 
             ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800' 
             : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
         }`}>
           <div className="flex items-center gap-2">
             <Clock className={`h-4 w-4 ${
-              isWithinTradingHours() ? 'text-green-600' : 'text-orange-600'
+              isTrading ? 'text-green-600' : 'text-orange-600'
             }`} />
             <div>
               <div className={`font-medium text-sm ${
-                isWithinTradingHours() ? 'text-green-800 dark:text-green-200' : 'text-orange-800 dark:text-orange-200'
+                isTrading ? 'text-green-800 dark:text-green-200' : 'text-orange-800 dark:text-orange-200'
               }`}>
                 {tradingStatus}
               </div>
               <div className={`text-xs ${
-                isWithinTradingHours() ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'
+                isTrading ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'
               }`}>
-                {isWithinTradingHours() 
+                {isTrading 
                   ? `系统正在实时监控中，数据每${settings.updateInterval}秒自动更新`
                   : '非交易时间，监控已暂停，数据更新将在下一个交易日自动恢复'
                 }

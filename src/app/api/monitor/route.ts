@@ -95,9 +95,10 @@ export async function PUT(req: NextRequest) {
     await sql`
       UPDATE "StockMonitor"
       SET "updatedAt" = NOW(),
-          code = ${updates.code},
-          name = ${updates.name},
-          "isActive" = ${updates.isActive}
+          code = COALESCE(${updates.code}, code),
+          name = COALESCE(${updates.name}, name),
+          "isActive" = COALESCE(${updates.isActive}, "isActive"),
+          "lastNotificationDate" = COALESCE(${updates.lastNotificationDate}, "lastNotificationDate")
       WHERE id = ${id} AND "userId" = ${session.user.id}
       RETURNING *;
     `;

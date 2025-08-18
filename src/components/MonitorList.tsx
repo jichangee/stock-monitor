@@ -8,9 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   getStockMonitors,
   updateStockMonitor,
-  deleteStockMonitor,
-  markMetricNotificationSent,
-  resetMonitorNotifications
+  deleteStockMonitor
 } from '@/lib/stockMonitor';
 import { fetchBatchStockData } from '@/lib/stockApi';
 import { sendStockMonitorNotification } from '@/lib/notifications';
@@ -30,24 +28,48 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   const [monitors, setMonitors] = useState<StockMonitor[]>([]);
   const [stockData, setStockData] = useState<Record<string, StockData>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMonitors, setIsLoadingMonitors] = useState(false);
+  const [tradingStatus, setTradingStatus] = useState('交易中');
+
+  useEffect(() => {
+    const fetchTradingStatus = async () => {
+      const status = await getTradingStatus();
+      setTradingStatus(status);
+    };
+    fetchTradingStatus();
+  }, []);
 
   const loadMonitors = useCallback(async () => {
-    const loadedMonitors = await getStockMonitors();
-    setMonitors(loadedMonitors);
+    setIsLoadingMonitors(true);
+    try {
+      const loadedMonitors = await getStockMonitors();
+      setMonitors(loadedMonitors);
+    } finally {
+      setIsLoadingMonitors(false);
+    }
   }, []);
 
   useEffect(() => {
+    // 仅页面首次加载时从远程获取监控数据
     loadMonitors();
-  }, [loadMonitors, refreshTrigger]);
+  }, [loadMonitors]);
 
   const checkAndSendNotification = useCallback(async (monitor: StockMonitor, stockData: StockData) => {
-    if (!isWithinTradingHours()) {
+    if (!(await isWithinTradingHours())) {
       return;
     }
 
     if (isNewTradingDay(monitor.lastNotificationDate)) {
-      await resetMonitorNotifications(monitor.id);
-      loadMonitors(); 
+      const resetMetrics = (monitor.metrics || []).map(metric => ({
+        ...metric,
+        notificationSent: false
+      }));
+      const payload = {
+        metrics: resetMetrics,
+        lastNotificationDate: new Date().toISOString()
+      } as Partial<StockMonitor>;
+      const updated = await updateStockMonitor(monitor.id, payload);
+      setMonitors(prev => prev.map(m => m.id === monitor.id ? (updated || { ...m, ...payload }) as StockMonitor : m));
       return;
     }
 
@@ -78,12 +100,17 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
         
         if (shouldNotify) {
           sendStockMonitorNotification(monitor, metric, stockData);
-          await markMetricNotificationSent(monitor.id, metric.id);
-          loadMonitors();
+          const newMetrics = (monitor.metrics || []).map(mt => mt.id === metric.id ? { ...mt, notificationSent: true } : mt);
+          const payload = {
+            metrics: newMetrics,
+            lastNotificationDate: new Date().toISOString()
+          } as Partial<StockMonitor>;
+          const updated = await updateStockMonitor(monitor.id, payload);
+          setMonitors(prev => prev.map(m => m.id === monitor.id ? (updated || { ...m, ...payload }) as StockMonitor : m));
         }
       }
     }
-  }, [loadMonitors]);
+  }, []);
 
   const updateStockData = useCallback(async () => {
     setIsLoading(true);
@@ -110,21 +137,26 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       
       setStockData(newStockData);
       
-      // 在数据更新后重新加载监控列表，确保状态同步
-      await loadMonitors();
-      
     } catch (error) {
       console.error('批量获取股票数据失败:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [monitors, checkAndSendNotification, loadMonitors]);
+  }, [monitors, checkAndSendNotification]);
 
   useEffect(() => {
-    if (monitors.length > 0 && isWithinTradingHours()) {
-      const interval = setInterval(updateStockData, settings.updateInterval * 1000); // 使用设置中的更新间隔
-      return () => clearInterval(interval);
-    }
+    const checkTradingAndSetInterval = async () => {
+      if (monitors.length > 0 && (await isWithinTradingHours())) {
+        const interval = setInterval(updateStockData, settings.updateInterval * 1000); // 使用设置中的更新间隔
+        return () => clearInterval(interval);
+      }
+    };
+  
+    const cleanupPromise = checkTradingAndSetInterval();
+  
+    return () => {
+      cleanupPromise.then(cleanup => cleanup && cleanup());
+    };
   }, [monitors, updateStockData, settings.updateInterval]);
 
   const toggleMonitor = async (monitor: StockMonitor) => {
@@ -133,7 +165,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     });
     
     if (updated) {
-      loadMonitors();
+      setMonitors(prev => prev.map(m => m.id === updated.id ? updated : m));
       toast.success(`监控已${updated.isActive ? '启用' : '禁用'}`);
     }
   };
@@ -141,7 +173,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   const deleteMonitor = async (id: string) => {
     const success = await deleteStockMonitor(id);
     if (success) {
-      loadMonitors();
+      setMonitors(prev => prev.filter(m => m.id !== id));
       toast.success('监控已删除');
     } else {
       toast.error('删除失败');
@@ -156,7 +188,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     );
     
     updateStockMonitor(monitor.id, { metrics: updatedMetrics });
-    loadMonitors();
+    setMonitors(prev => prev.map(m => m.id === monitor.id ? { ...m, metrics: updatedMetrics } : m));
     toast.success('通知状态已重置');
   };
 
@@ -221,9 +253,16 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
     return (
       <Card className="w-full">
         <CardContent className="pt-6">
-          <p className="text-center text-muted-foreground">
-            暂无监控项目，请添加一个股票监控
-          </p>
+          {isLoadingMonitors ? (
+            <div className="flex items-center justify-center text-muted-foreground">
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              加载中...
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground">
+              暂无监控项目，请添加一个股票监控
+            </p>
+          )}
         </CardContent>
       </Card>
     );
@@ -232,10 +271,14 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
   return (
     <div className="space-y-3">
       
+      {/* 统一表格加载状态 */}
+      { /* 由获取监控列表或股票数据触发 */ }
+      
+      
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4" />
-          <span className="text-sm font-medium">{getTradingStatus()}</span>
+          <span className="text-sm font-medium">{tradingStatus}</span>
         </div>
         <div className="flex items-center gap-2">
           
@@ -255,7 +298,13 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       </div>
       
       {/* 监控列表 - 改为列表形式 */}
-      <div className="bg-card border rounded-lg overflow-hidden">
+      <div className="bg-card border rounded-lg overflow-hidden relative">
+        {(isLoading || isLoadingMonitors) && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-10">
+            <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+            <span className="text-sm text-muted-foreground">加载中...</span>
+          </div>
+        )}
         {/* 添加水平滚动容器 */}
         <div className="overflow-x-auto">
           <div className="min-w-[800px]"> {/* 减小最小宽度 */}
@@ -472,7 +521,7 @@ export function MonitorList({ refreshTrigger, onEditMonitor }: MonitorListProps)
       {/* 数据更新时间提示 */}
       {monitors.length > 0 && (
         <div className="text-xs text-muted-foreground text-center">
-          {isWithinTradingHours() 
+          {tradingStatus === '交易中'
             ? `数据每${settings.updateInterval}秒自动更新，触发条件的监控项会高亮显示`
             : '非交易时间，数据更新已暂停'
           }

@@ -42,7 +42,7 @@ const metricSchema = z.object({
 const addMonitorSchema = z.object({
   code: z.string().min(1, '请输入股票代码').trim(),
   name: z.string().min(1, '请输入股票名称').trim(),
-  metrics: z.array(metricSchema).min(1, '至少需要添加一个监控指标')
+  metrics: z.array(metricSchema)
 });
 
 type AddMonitorFormData = z.infer<typeof addMonitorSchema>;
@@ -402,7 +402,7 @@ export function MonitorDialog({ open, onOpenChange, editMonitor, onMonitorAdded 
             <Button type="button" variant="outline" onClick={handleClose}>
               取消
             </Button>
-            <Button type="submit" disabled={isLoading || metrics.length === 0}>
+            <Button type="submit" disabled={isLoading}>
               {isLoading ? (isEditMode ? '更新中...' : '添加中...') : (isEditMode ? '更新监控' : '添加监控')}
             </Button>
           </DialogFooter>

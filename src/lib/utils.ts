@@ -1,6 +1,10 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+import { isHoliday } from './holidays';
+
+dayjs.extend(isBetween);
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -22,48 +26,64 @@ export function generateUUID(): string {
 }
 
 // 检查是否为工作日（周一到周五）
-function isWeekday(date: dayjs.Dayjs): boolean {
+async function isTradingDay(date: dayjs.Dayjs): Promise<boolean> {
   const day = date.day(); // 0 = 周日, 1 = 周一, ..., 6 = 周六
-  return day >= 1 && day <= 5;
+  const isWd = day >= 1 && day <= 5;
+  if (!isWd) {
+    return false;
+  }
+  return !(await isHoliday(date));
 }
 
 // 检查当前时间是否在工作时间内（工作日 9:30-15:00）
-export function isWithinTradingHours(): boolean {
+export async function isWithinTradingHours(): Promise<boolean> {
   const now = dayjs();
-  
-  // 检查是否为工作日
-  if (!isWeekday(now)) {
+  if (!(await isTradingDay(now))) {
     return false;
   }
-  
-  // 检查时间是否在 9:30-15:00 之间
-  const startTime = now.hour(9).minute(30).second(0);
-  const endTime = now.hour(15).minute(0).second(0);
-  
-  return now.isAfter(startTime) && now.isBefore(endTime);
+
+  const morningStart = now.hour(9).minute(30).second(0);
+  const morningEnd = now.hour(11).minute(30).second(0);
+  const afternoonStart = now.hour(13).minute(0).second(0);
+  const afternoonEnd = now.hour(15).minute(0).second(0);
+
+  return now.isBetween(morningStart, morningEnd, null, '()') || now.isBetween(afternoonStart, afternoonEnd, null, '()');
 }
 
 // 获取下一个交易时间
-export function getNextTradingTime(): Date {
-  const now = dayjs();
-  
-  // 如果当前是工作日且在交易时间内，返回下一个交易日的开始时间
-  if (isWeekday(now) && isWithinTradingHours()) {
-    // 如果当前时间超过15:00，返回下一个工作日9:30
-    if (now.hour() >= 15) {
-      return now.add(1, 'day').hour(9).minute(30).second(0).toDate();
+export async function getNextTradingTime(): Promise<Date> {
+  let nextTradingDay = dayjs();
+
+  // 循环直到找到下一个交易日
+  while (true) {
+    // 如果当天是交易日
+    if (await isTradingDay(nextTradingDay)) {
+      const morningStart = nextTradingDay.hour(9).minute(30).second(0);
+      const afternoonStart = nextTradingDay.hour(13).minute(0).second(0);
+      const afternoonEnd = nextTradingDay.hour(15).minute(0).second(0);
+
+      // 如果当前时间在开盘前
+      if (dayjs().isBefore(morningStart)) {
+        return morningStart.toDate();
+      }
+      // 如果当前时间在午休
+      if (dayjs().isBefore(afternoonStart)) {
+        return afternoonStart.toDate();
+      }
+      // 如果当前时间在下午收盘后
+      if (dayjs().isAfter(afternoonEnd)) {
+        // 从第二天开始找
+        nextTradingDay = nextTradingDay.add(1, 'day');
+        continue;
+      }
+      // 交易时间内，理论上不会调用此函数，但作为兜底，返回下一个交易日的开盘时间
+      nextTradingDay = nextTradingDay.add(1, 'day');
+      continue;
+    } else {
+      // 如果当天不是交易日，则检查下一天
+      nextTradingDay = nextTradingDay.add(1, 'day');
     }
-    // 否则返回当天的15:00
-    return now.hour(15).minute(0).second(0).toDate();
   }
-  
-  // 如果当前不是工作日或不在交易时间，找到下一个工作日9:30
-  let nextTradingDay = now;
-  while (!isWeekday(nextTradingDay)) {
-    nextTradingDay = nextTradingDay.add(1, 'day');
-  }
-  
-  return nextTradingDay.hour(9).minute(30).second(0).toDate();
 }
 
 // 检查是否为新的交易日（用于重置通知状态）
@@ -90,9 +110,9 @@ export function formatDate(date: Date): string {
 }
 
 // 获取当前交易状态描述
-export function getTradingStatus(): string {
-  if (!isWithinTradingHours()) {
-    const nextTime = getNextTradingTime();
+export async function getTradingStatus(): Promise<string> {
+  if (!(await isWithinTradingHours())) {
+    const nextTime = await getNextTradingTime();
     return `非交易时间，下次交易时间：${formatDate(nextTime)} ${formatTime(nextTime)}`;
   }
   
